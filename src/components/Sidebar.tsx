@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import type { Folder as FolderType, Note, User } from "../types";
 
+const NOTE_DRAG_MIME = "application/x-marknote-note-id";
+
 interface Props {
   user: User;
   notes: Note[];
@@ -24,6 +26,7 @@ interface Props {
   onRenameFolder: (id: string, name: string) => void;
   onDeleteFolder: (id: string) => void;
   onDelete: (id: string) => void;
+  onMoveNote: (noteId: string, folderId: string | null) => void;
   onSignOut: () => void;
 }
 
@@ -50,12 +53,17 @@ function highlight(text: string, kw: string) {
   );
 }
 
+function isNoteDrag(e: React.DragEvent) {
+  return e.dataTransfer.types.includes(NOTE_DRAG_MIME);
+}
+
 function NoteItem({
   note,
   activeId,
   search,
   onSelect,
   onDelete,
+  draggable = false,
   indent = 0,
 }: {
   note: Note;
@@ -63,16 +71,31 @@ function NoteItem({
   search: string;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  draggable?: boolean;
   indent?: number;
 }) {
+  const didDrag = useRef(false);
+
   return (
     <li>
       <button
-        onClick={() => onSelect(note.id)}
+        draggable={draggable}
+        onDragStart={(e) => {
+          didDrag.current = true;
+          e.dataTransfer.setData(NOTE_DRAG_MIME, note.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => {
+          setTimeout(() => { didDrag.current = false; }, 0);
+        }}
+        onClick={() => {
+          if (didDrag.current) return;
+          onSelect(note.id);
+        }}
         style={{ paddingLeft: `${12 + indent * 16}px` }}
         className={`w-full text-left pr-3 py-2 rounded-lg transition-colors group relative ${
           activeId === note.id ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50 text-gray-700"
-        }`}
+        } ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
         <p
           className="text-sm font-medium truncate leading-snug"
@@ -104,6 +127,56 @@ function NoteItem({
   );
 }
 
+function DropZone({
+  folderId,
+  onMoveNote,
+  onExpand,
+  className = "",
+  children,
+}: {
+  folderId: string | null;
+  onMoveNote: (noteId: string, folderId: string | null) => void;
+  onExpand?: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
+  function handleDragOver(e: React.DragEvent) {
+    if (!isNoteDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(true);
+    onExpand?.();
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOver(false);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const noteId = e.dataTransfer.getData(NOTE_DRAG_MIME);
+    if (noteId) onMoveNote(noteId, folderId);
+  }
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`rounded-lg transition-colors ${
+        dragOver ? "bg-amber-50 ring-2 ring-amber-300 ring-inset" : ""
+      } ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function FolderRow({
   folder,
   folders,
@@ -118,6 +191,8 @@ function FolderRow({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  onMoveNote,
+  onExpandFolder,
   depth = 0,
 }: {
   folder: FolderType;
@@ -133,6 +208,8 @@ function FolderRow({
   onCreateFolder: (parentId?: string | null) => Promise<FolderType>;
   onRenameFolder: (id: string, name: string) => void;
   onDeleteFolder: (id: string) => void;
+  onMoveNote: (noteId: string, folderId: string | null) => void;
+  onExpandFolder: (id: string) => void;
   depth?: number;
 }) {
   const [editing, setEditing] = useState(false);
@@ -152,73 +229,79 @@ function FolderRow({
 
   return (
     <li>
-      <div
-        style={{ paddingLeft: `${8 + depth * 16}px` }}
-        className="flex items-center gap-0.5 group rounded-lg hover:bg-gray-50 pr-1"
+      <DropZone
+        folderId={folder.id}
+        onMoveNote={onMoveNote}
+        onExpand={() => onExpandFolder(folder.id)}
       >
-        <button
-          onClick={() => onToggle(folder.id)}
-          className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
+        <div
+          style={{ paddingLeft: `${8 + depth * 16}px` }}
+          className="flex items-center gap-0.5 group rounded-lg hover:bg-gray-50 pr-1"
         >
-          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-        </button>
-        <Folder className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-        {editing ? (
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitRename();
-              if (e.key === "Escape") { setName(folder.name); setEditing(false); }
-            }}
-            className="flex-1 text-sm text-gray-700 outline-none bg-white border border-blue-300 rounded px-1 py-0.5 min-w-0"
-          />
-        ) : (
           <button
             onClick={() => onToggle(folder.id)}
-            onDoubleClick={() => setEditing(true)}
-            className="flex-1 text-left text-sm font-medium text-gray-700 truncate py-1.5"
+            className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
           >
-            {folder.name}
+            {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
-        )}
-        <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-          <button
-            onClick={() => onCreate(folder.id)}
-            className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600"
-            title="在此文件夹新建笔记"
-          >
-            <FilePlus className="w-3 h-3" />
-          </button>
-          <button
-            onClick={() => onCreateFolder(folder.id)}
-            className="p-1 rounded hover:bg-amber-50 text-gray-400 hover:text-amber-600"
-            title="新建子文件夹"
-          >
-            <FolderPlus className="w-3 h-3" />
-          </button>
-          <button
-            onClick={() => setEditing(true)}
-            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-            title="重命名"
-          >
-            <Pencil className="w-3 h-3" />
-          </button>
-          <button
-            onClick={() => {
-              if (confirm(`删除文件夹「${folder.name}」？其中的笔记将移至未分类。`)) {
-                onDeleteFolder(folder.id);
-              }
-            }}
-            className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
-            title="删除文件夹"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+          <Folder className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+          {editing ? (
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") { setName(folder.name); setEditing(false); }
+              }}
+              className="flex-1 text-sm text-gray-700 outline-none bg-white border border-blue-300 rounded px-1 py-0.5 min-w-0"
+            />
+          ) : (
+            <button
+              onClick={() => onToggle(folder.id)}
+              onDoubleClick={() => setEditing(true)}
+              className="flex-1 text-left text-sm font-medium text-gray-700 truncate py-1.5"
+            >
+              {folder.name}
+            </button>
+          )}
+          <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+            <button
+              onClick={() => onCreate(folder.id)}
+              className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600"
+              title="在此文件夹新建笔记"
+            >
+              <FilePlus className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => onCreateFolder(folder.id)}
+              className="p-1 rounded hover:bg-amber-50 text-gray-400 hover:text-amber-600"
+              title="新建子文件夹"
+            >
+              <FolderPlus className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              title="重命名"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`删除文件夹「${folder.name}」？其中的笔记将移至未分类。`)) {
+                  onDeleteFolder(folder.id);
+                }
+              }}
+              className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+              title="删除文件夹"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
         </div>
-      </div>
+      </DropZone>
       {isOpen && (
         <ul className="space-y-0.5">
           {folderNotes.map((note) => (
@@ -229,6 +312,7 @@ function FolderRow({
               search={search}
               onSelect={onSelect}
               onDelete={onDelete}
+              draggable
               indent={depth + 2}
             />
           ))}
@@ -248,12 +332,14 @@ function FolderRow({
               onCreateFolder={onCreateFolder}
               onRenameFolder={onRenameFolder}
               onDeleteFolder={onDeleteFolder}
+              onMoveNote={onMoveNote}
+              onExpandFolder={onExpandFolder}
               depth={depth + 1}
             />
           ))}
           {folderNotes.length === 0 && childFolders.length === 0 && (
             <li className="text-xs text-gray-300 py-1" style={{ paddingLeft: `${28 + depth * 16}px` }}>
-              空文件夹
+              空文件夹 · 拖入笔记
             </li>
           )}
         </ul>
@@ -273,6 +359,7 @@ export default function Sidebar({
   onRenameFolder,
   onDeleteFolder,
   onDelete,
+  onMoveNote,
   onSignOut,
 }: Props) {
   const [search, setSearch] = useState("");
@@ -310,6 +397,15 @@ export default function Sidebar({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  function expandFolder(id: string) {
+    setExpanded((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
       return next;
     });
   }
@@ -414,13 +510,16 @@ export default function Sidebar({
           </>
         ) : (
           <>
-            {uncategorized.length > 0 && (
-              <>
-                {folders.length > 0 && (
-                  <li className="px-3 pt-1 pb-0.5 text-xs font-medium text-gray-400 uppercase tracking-wide">
+            {folders.length > 0 && (
+              <li>
+                <DropZone folderId={null} onMoveNote={onMoveNote}>
+                  <div className="px-3 pt-1 pb-0.5 text-xs font-medium text-gray-400 uppercase tracking-wide">
                     未分类
-                  </li>
-                )}
+                    {uncategorized.length === 0 && (
+                      <span className="normal-case font-normal text-gray-300 ml-1">· 拖入笔记</span>
+                    )}
+                  </div>
+                </DropZone>
                 {uncategorized.map((note) => (
                   <NoteItem
                     key={note.id}
@@ -429,10 +528,21 @@ export default function Sidebar({
                     search={search}
                     onSelect={onSelect}
                     onDelete={onDelete}
+                    draggable
                   />
                 ))}
-              </>
+              </li>
             )}
+            {!folders.length && uncategorized.map((note) => (
+              <NoteItem
+                key={note.id}
+                note={note}
+                activeId={activeId}
+                search={search}
+                onSelect={onSelect}
+                onDelete={onDelete}
+              />
+            ))}
             {rootFolders.map((folder) => (
               <FolderRow
                 key={folder.id}
@@ -449,6 +559,8 @@ export default function Sidebar({
                 onCreateFolder={handleCreateFolder}
                 onRenameFolder={onRenameFolder}
                 onDeleteFolder={onDeleteFolder}
+                onMoveNote={onMoveNote}
+                onExpandFolder={expandFolder}
               />
             ))}
             {notes.length === 0 && folders.length === 0 && (

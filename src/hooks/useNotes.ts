@@ -71,6 +71,18 @@ export function useNotes(userId: string) {
     setNotes((prev) => prev.map((n) => (n.folderId === id ? { ...n, folderId: null } : n)));
   }, []);
 
+  const moveNoteToFolder = useCallback(async (id: string, folderId: string | null) => {
+    setNotes((prev) => {
+      const note = prev.find((n) => n.id === id);
+      if (!note || note.folderId === folderId) return prev;
+      return prev.map((n) =>
+        n.id === id ? { ...n, folderId, updatedAt: new Date().toISOString() } : n
+      );
+    });
+    const updated = await db.updateNote(id, { folderId });
+    setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)));
+  }, []);
+
   return {
     notes,
     folders,
@@ -81,5 +93,6 @@ export function useNotes(userId: string) {
     createFolder,
     renameFolder,
     deleteFolder,
+    moveNoteToFolder,
   };
 }

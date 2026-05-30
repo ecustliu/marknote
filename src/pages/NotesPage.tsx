@@ -19,6 +19,7 @@ export default function NotesPage() {
     createFolder,
     renameFolder,
     deleteFolder,
+    moveNoteToFolder,
   } = useNotes(user!.id);
   const [activeId, setActiveId] = useState<string | null>(null);
   const { width, collapsed, resizing, toggleCollapsed, startResize } = useSidebarLayout();
@@ -53,6 +54,7 @@ export default function NotesPage() {
             onRenameFolder={renameFolder}
             onDeleteFolder={deleteFolder}
             onDelete={handleDelete}
+            onMoveNote={moveNoteToFolder}
             onSignOut={signOut}
           />
           <div
