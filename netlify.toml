@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# React Router SPA：直接访问 /auth 等路径时回退到 index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
