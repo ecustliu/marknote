@@ -222,6 +222,10 @@ export default function Editor({ note, userId, onSave }: Props) {
 
       {/* 编辑区 / 预览区 */}
       <div className="flex flex-1 overflow-hidden">
+        {headings.length > 0 && (
+          <TocPanel items={headings} onSelect={scrollToHeading} />
+        )}
+
         {/* 编辑面板 */}
         {viewMode !== "preview" && (
           <div className={`overflow-y-auto px-8 py-4 ${viewMode === "split" ? "w-1/2 border-r border-gray-100" : "flex-1"}`}>
@@ -234,10 +238,6 @@ export default function Editor({ note, userId, onSave }: Props) {
           <div ref={previewRef} className={viewMode === "split" ? "w-1/2 overflow-hidden" : "flex-1 overflow-hidden"}>
             <MarkdownPreview md={md} className="h-full" />
           </div>
-        )}
-
-        {headings.length > 0 && (
-          <TocPanel items={headings} onSelect={scrollToHeading} />
         )}
       </div>
 

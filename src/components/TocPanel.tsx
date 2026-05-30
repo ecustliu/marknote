@@ -10,7 +10,7 @@ export default function TocPanel({ items, onSelect }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <aside className="w-52 shrink-0 border-l border-gray-100 bg-gray-50/60 flex flex-col overflow-hidden">
+    <aside className="w-52 shrink-0 border-r border-gray-100 bg-gray-50/60 flex flex-col overflow-hidden">
       <div className="flex items-center gap-1.5 px-4 py-3 border-b border-gray-100 text-xs font-medium text-gray-500">
         <ListTree className="w-3.5 h-3.5" />
         目录
