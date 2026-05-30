@@ -35,7 +35,7 @@ if (!existsSync(envPath)) {
   console.log("  请复制 .env.example → .env.local 并填入 Supabase 项目信息\n");
   console.log("快速步骤:");
   console.log("  1. 打开 https://supabase.com/dashboard 创建项目");
-  console.log("  2. Settings → API 复制 Project URL 和 anon public key");
+  console.log("  2. Settings → API Keys 复制 Project URL 和 Publishable key");
   console.log("  3. SQL Editor 粘贴执行 supabase/schema.sql");
   console.log("  4. Authentication → Providers → Email 可关闭 Confirm email（开发更方便）");
   process.exit(1);
@@ -48,7 +48,7 @@ if (!url || !anonKey) {
 
 if (url.includes("YOUR_PROJECT") || anonKey.includes("YOUR_ANON")) {
   console.log("✗ .env.local 仍是模板占位符，请填入真实的 Supabase URL 和 anon key");
-  console.log("  Dashboard → Settings → API");
+  console.log("  Dashboard → Settings → API Keys → Publishable key");
   process.exit(1);
 }
 

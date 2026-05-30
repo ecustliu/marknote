@@ -15,7 +15,8 @@
     "cap:sync": "cap sync",
     "cap:ios": "cap open ios",
     "cap:android": "cap open android",
-    "supabase:check": "node scripts/check-supabase.mjs"
+    "supabase:check": "node scripts/check-supabase.mjs",
+    "supabase:setup": "node scripts/setup-supabase.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

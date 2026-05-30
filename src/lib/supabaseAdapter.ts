@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { DataAdapter, Note } from "../types";
+import { isValidSupabaseAnonKey } from "./supabaseConfig";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -11,8 +12,7 @@ function isValidSupabaseConfig(rawUrl?: string, rawKey?: string): boolean {
   if (!u || !k) return false;
   if (u.includes("YOUR_PROJECT") || k.includes("YOUR_ANON")) return false;
   if (!u.startsWith("https://") || !u.includes(".supabase.co")) return false;
-  // anon key 是 JWT，长度通常 > 100
-  return k.startsWith("eyJ") && k.length > 50;
+  return isValidSupabaseAnonKey(k);
 }
 
 export const isSupabaseConfigured = isValidSupabaseConfig(url, anonKey);
