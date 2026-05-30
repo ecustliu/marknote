@@ -23,37 +23,67 @@ import type { Note } from "../types";
 
 type ViewMode = "edit" | "split" | "preview";
 
-// 粘贴时按「块级」Markdown 解析纯文本，避免 tiptap-markdown 默认的
-// inline 解析 / 富文本 HTML 回退把整段内容塞进代码块导致格式错乱。
-const MarkdownPaste = Extension.create({
-  name: "markdownPaste",
-  priority: 1000,
-  addProseMirrorPlugins() {
-    const editor = this.editor;
-    return [
-      new Plugin({
-        key: new PluginKey("markdownPaste"),
-        props: {
-          handlePaste: (view, event) => {
-            const cd = event.clipboardData;
-            if (!cd || cd.files.length > 0) return false;
-            const text = cd.getData("text/plain");
-            if (!text) return false;
+function getClipboardImageFile(cd: DataTransfer): File | null {
+  if (cd.files.length > 0) {
+    const file = cd.files[0];
+    if (file.type.startsWith("image/")) return file;
+  }
+  for (const item of cd.items) {
+    if (item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) return file;
+    }
+  }
+  return null;
+}
 
-            const html = editor.storage.markdown.parser.parse(text) as string;
-            const dom = document.createElement("div");
-            dom.innerHTML = html;
-            const slice = PMDOMParser.fromSchema(view.state.schema).parseSlice(dom, {
-              preserveWhitespace: false,
-            });
-            view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
-            return true;
+/** 粘贴：截图/图片走 uploadImage；纯文本走块级 Markdown 解析 */
+function createContentPasteExtension(userId: string) {
+  return Extension.create({
+    name: "contentPaste",
+    priority: 1000,
+    addProseMirrorPlugins() {
+      const editor = this.editor;
+      return [
+        new Plugin({
+          key: new PluginKey("contentPaste"),
+          props: {
+            handlePaste: (view, event) => {
+              const cd = event.clipboardData;
+              if (!cd) return false;
+
+              const imageFile = getClipboardImageFile(cd);
+              if (imageFile) {
+                event.preventDefault();
+                void (async () => {
+                  try {
+                    const url = await db.uploadImage(userId, imageFile);
+                    editor.chain().focus().setImage({ src: url }).run();
+                  } catch {
+                    alert("图片上传失败");
+                  }
+                })();
+                return true;
+              }
+
+              const text = cd.getData("text/plain");
+              if (!text || cd.files.length > 0) return false;
+
+              const html = editor.storage.markdown.parser.parse(text) as string;
+              const dom = document.createElement("div");
+              dom.innerHTML = html;
+              const slice = PMDOMParser.fromSchema(view.state.schema).parseSlice(dom, {
+                preserveWhitespace: false,
+              });
+              view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+              return true;
+            },
           },
-        },
-      }),
-    ];
-  },
-});
+        }),
+      ];
+    },
+  });
+}
 
 interface Props {
   note: Note;
@@ -87,9 +117,11 @@ export default function Editor({ note, userId, onSave }: Props) {
 
   useEffect(() => { setTitle(note.title); setTags(note.tags); }, [note.id, note.title, note.tags]);
 
+  const contentPasteExt = useMemo(() => createContentPasteExtension(userId), [userId]);
+
   const editor = useEditor({
     extensions: [
-      StarterKit, Markdown, MarkdownPaste, ImageExt,
+      StarterKit, Markdown, contentPasteExt, ImageExt,
       LinkExt.configure({ openOnClick: false }),
       PlaceholderExt.configure({ placeholder: "开始记录… 支持完整 Markdown 语法" }),
       TaskList, TaskItem.configure({ nested: true }),
