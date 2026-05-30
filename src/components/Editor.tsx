@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import ImageExt from "@tiptap/extension-image";
@@ -7,9 +7,12 @@ import PlaceholderExt from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
-import { Image, Tag, X } from "lucide-react";
+import { marked } from "marked";
+import { Columns2, Eye, Image, PencilLine, Tag, X } from "lucide-react";
 import { db } from "../lib/db";
 import type { Note } from "../types";
+
+type ViewMode = "edit" | "split" | "preview";
 
 interface Props {
   note: Note;
@@ -39,6 +42,7 @@ export default function Editor({ note, userId, onSave }: Props) {
   const [title, setTitle] = useState(note.title);
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>(note.tags);
+  const [viewMode, setViewMode] = useState<ViewMode>("edit");
 
   useEffect(() => { setTitle(note.title); setTags(note.tags); }, [note.id, note.title, note.tags]);
 
@@ -126,22 +130,55 @@ export default function Editor({ note, userId, onSave }: Props) {
 
       {/* 工具栏 */}
       <div className="flex items-center gap-0.5 px-6 py-1.5 border-b border-gray-100 flex-wrap">
-        {TOOLBAR(editor).map(({ label, cmd, active, cls }) => (
+        {viewMode !== "preview" && TOOLBAR(editor).map(({ label, cmd, active, cls }) => (
           <button
             key={label}
             onMouseDown={(e) => { e.preventDefault(); cmd(); }}
             className={`px-2 py-1 rounded text-sm transition-colors ${cls} ${active ? "bg-blue-100 text-blue-700" : "text-gray-500 hover:bg-gray-100"}`}
           >{label}</button>
         ))}
-        <div className="w-px h-4 bg-gray-200 mx-1" />
-        <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" title="插入图片">
-          <Image className="w-4 h-4" />
-        </button>
+        {viewMode !== "preview" && (
+          <>
+            <div className="w-px h-4 bg-gray-200 mx-1" />
+            <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" title="插入图片">
+              <Image className="w-4 h-4" />
+            </button>
+          </>
+        )}
+
+        {/* 视图切换 */}
+        <div className="ml-auto flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
+          {([
+            { mode: "edit" as ViewMode,    icon: <PencilLine className="w-3.5 h-3.5" />, title: "编辑" },
+            { mode: "split" as ViewMode,   icon: <Columns2   className="w-3.5 h-3.5" />, title: "分栏" },
+            { mode: "preview" as ViewMode, icon: <Eye        className="w-3.5 h-3.5" />, title: "预览" },
+          ] as const).map(({ mode, icon, title: t }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              title={t}
+              className={`p-1 rounded transition-colors ${viewMode === mode ? "bg-blue-100 text-blue-700" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+            >{icon}</button>
+          ))}
+        </div>
       </div>
 
-      {/* 编辑区 */}
-      <div className="flex-1 overflow-y-auto px-8 py-4">
-        <EditorContent editor={editor} />
+      {/* 编辑区 / 预览区 */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* 编辑面板 */}
+        {viewMode !== "preview" && (
+          <div className={`overflow-y-auto px-8 py-4 ${viewMode === "split" ? "w-1/2 border-r border-gray-100" : "flex-1"}`}>
+            <EditorContent editor={editor} />
+          </div>
+        )}
+
+        {/* 预览面板 */}
+        {viewMode !== "edit" && (
+          <MarkdownPreview
+            md={md}
+            className={viewMode === "split" ? "w-1/2" : "flex-1"}
+          />
+        )}
       </div>
 
       {/* 状态栏 */}
@@ -150,5 +187,15 @@ export default function Editor({ note, userId, onSave }: Props) {
         <span>{md.length} 字符</span>
       </div>
     </div>
+  );
+}
+
+function MarkdownPreview({ md, className = "" }: { md: string; className?: string }) {
+  const html = useMemo(() => marked(md) as string, [md]);
+  return (
+    <div
+      className={`preview-note overflow-y-auto px-8 py-4 bg-gray-50/50 ${className}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
