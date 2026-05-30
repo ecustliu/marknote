@@ -17,6 +17,10 @@ body {
 
 /* ── TipTap / Markdown 渲染排版 ── */
 .prose-note { line-height: 1.75; color: #1f2937; }
+.prose-note h1, .prose-note h2, .prose-note h3,
+.preview-note h1, .preview-note h2, .preview-note h3 {
+  scroll-margin-top: 1.5rem;
+}
 .prose-note h1 { font-size: 1.6rem; font-weight: 700; margin: 1rem 0 .5rem; }
 .prose-note h2 { font-size: 1.3rem; font-weight: 700; margin: .9rem 0 .4rem; }
 .prose-note h3 { font-size: 1.1rem; font-weight: 600; margin: .8rem 0 .3rem; }

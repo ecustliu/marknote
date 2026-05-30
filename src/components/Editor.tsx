@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEditor, EditorContent, type Editor as TiptapEditor } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { DOMParser as PMDOMParser } from "@tiptap/pm/model";
@@ -17,6 +17,8 @@ import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import { Columns2, Eye, Image, PencilLine, Table2, Tag, X } from "lucide-react";
 import { db } from "../lib/db";
+import { extractHeadings, type TocItem } from "../lib/headings";
+import TocPanel from "./TocPanel";
 import type { Note } from "../types";
 
 type ViewMode = "edit" | "split" | "preview";
@@ -140,8 +142,21 @@ export default function Editor({ note, userId, onSave }: Props) {
     input.click();
   }, [editor, userId]);
 
+  const previewRef = useRef<HTMLDivElement>(null);
+  const md = editor?.storage.markdown.getMarkdown() as string ?? note.content;
+  const headings = useMemo(() => extractHeadings(md), [md]);
+
+  const scrollToHeading = useCallback((item: TocItem) => {
+    if (!editor) return;
+    if (viewMode !== "preview") scrollToHeadingInEditor(editor, item.index);
+    if (viewMode !== "edit") {
+      previewRef.current
+        ?.querySelector(`#${CSS.escape(item.id)}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [editor, viewMode]);
+
   if (!editor) return null;
-  const md = editor.storage.markdown.getMarkdown() as string;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -216,10 +231,13 @@ export default function Editor({ note, userId, onSave }: Props) {
 
         {/* 预览面板 */}
         {viewMode !== "edit" && (
-          <MarkdownPreview
-            md={md}
-            className={viewMode === "split" ? "w-1/2" : "flex-1"}
-          />
+          <div ref={previewRef} className={viewMode === "split" ? "w-1/2 overflow-hidden" : "flex-1 overflow-hidden"}>
+            <MarkdownPreview md={md} className="h-full" />
+          </div>
+        )}
+
+        {headings.length > 0 && (
+          <TocPanel items={headings} onSelect={scrollToHeading} />
         )}
       </div>
 
@@ -286,12 +304,41 @@ function TableMenu({ editor }: { editor: ReturnType<typeof useEditor> }) {
   );
 }
 
+function scrollToHeadingInEditor(editor: TiptapEditor, index: number) {
+  let i = 0;
+  let targetPos: number | null = null;
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === "heading") {
+      if (i === index) {
+        targetPos = pos;
+        return false;
+      }
+      i++;
+    }
+  });
+  if (targetPos !== null) {
+    editor.chain().focus().setTextSelection(targetPos + 1).scrollIntoView().run();
+  }
+}
+
 function MarkdownPreview({ md, className = "" }: { md: string; className?: string }) {
-  const html = useMemo(() => marked(md) as string, [md]);
+  const html = useMemo(() => renderMarkdownWithHeadingIds(md), [md]);
   return (
     <div
       className={`preview-note overflow-y-auto px-8 py-4 bg-gray-50/50 ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
+}
+
+function renderMarkdownWithHeadingIds(md: string): string {
+  const headings = extractHeadings(md);
+  let hi = 0;
+  const renderer = new marked.Renderer();
+  renderer.heading = ({ text, depth }) => {
+    const id = headings[hi]?.id ?? `heading-${hi}`;
+    hi++;
+    return `<h${depth} id="${id}">${text}</h${depth}>\n`;
+  };
+  return marked.parse(md, { renderer }) as string;
 }
