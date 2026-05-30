@@ -205,7 +205,8 @@ export default function Editor({ note, userId, folders, onSave }: Props) {
     setExporting(true);
     try {
       await exportNoteToPdf({ title, content: md, tags });
-    } catch {
+    } catch (err) {
+      console.error("PDF export failed:", err);
       alert("PDF 导出失败，请稍后重试");
     } finally {
       setExporting(false);
