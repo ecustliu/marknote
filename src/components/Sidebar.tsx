@@ -27,6 +27,18 @@ interface Props {
   onSignOut: () => void;
 }
 
+function userInitials(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const parts = local.split(/[._-]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return local.slice(0, 2).toUpperCase() || "?";
+}
+
+function userDisplayName(email: string): string {
+  const local = email.split("@")[0] ?? email;
+  return local.replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function highlight(text: string, kw: string) {
   if (!kw) return text;
   const idx = text.toLowerCase().indexOf(kw.toLowerCase());
@@ -314,7 +326,7 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="w-64 h-full flex flex-col bg-white border-r border-gray-100 select-none">
+    <aside className="h-full flex flex-col bg-white select-none min-w-0">
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
         <span className="font-bold text-gray-800 text-base">Marknote</span>
         <div className="flex gap-1">
@@ -332,17 +344,25 @@ export default function Sidebar({
           >
             <FolderPlus className="w-4 h-4" />
           </button>
-          <button
-            onClick={onSignOut}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
-            title="退出登录"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
-      <div className="px-4 py-2 text-xs text-gray-400 truncate">{user.email}</div>
+      <div className="mx-3 mt-3 mb-1 flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/40 px-3 py-2.5">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white shadow-sm">
+          {userInitials(user.email)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-gray-800">{userDisplayName(user.email)}</p>
+          <p className="truncate text-xs text-gray-400">{user.email}</p>
+        </div>
+        <button
+          onClick={onSignOut}
+          className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/80 text-gray-400 hover:text-red-500 transition-colors"
+          title="退出登录"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
+      </div>
 
       <div className="px-3 pb-2">
         <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
