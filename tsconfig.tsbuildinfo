@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/components/editor.tsx","./src/components/sidebar.tsx","./src/context/authcontext.tsx","./src/hooks/usenotes.ts","./src/lib/db.ts","./src/lib/localadapter.ts","./src/lib/platform.ts","./src/lib/supabaseadapter.ts","./src/pages/authpage.tsx","./src/pages/notespage.tsx"],"version":"5.9.3"}

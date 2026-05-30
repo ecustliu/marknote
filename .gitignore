@@ -3,6 +3,7 @@ node_modules
 # build
 dist
 dist-ssr
+*.tsbuildinfo
 # env
 .env
 .env.local

@@ -10,14 +10,15 @@ import PlaceholderExt from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
-import { marked } from "marked";
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { Columns2, Eye, FolderOpen, Image, PencilLine, Table2, Tag, X } from "lucide-react";
+import { Columns2, Eye, FileDown, FolderOpen, Image, PencilLine, Table2, Tag, X } from "lucide-react";
 import { db } from "../lib/db";
+import { exportNoteToPdf } from "../lib/exportPdf";
 import { extractHeadings, type TocItem } from "../lib/headings";
+import { renderMarkdownToHtml } from "../lib/markdownRender";
 import TocPanel from "./TocPanel";
 import type { Folder, Note } from "../types";
 
@@ -124,6 +125,7 @@ export default function Editor({ note, userId, folders, onSave }: Props) {
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>(note.tags);
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => { setTitle(note.title); setTags(note.tags); }, [note.id, note.title, note.tags]);
 
@@ -198,6 +200,18 @@ export default function Editor({ note, userId, folders, onSave }: Props) {
     }
   }, [editor, viewMode]);
 
+  const handleExportPdf = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportNoteToPdf({ title, content: md, tags });
+    } catch {
+      alert("PDF 导出失败，请稍后重试");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, title, md, tags]);
+
   if (!editor) return null;
 
   return (
@@ -259,6 +273,16 @@ export default function Editor({ note, userId, folders, onSave }: Props) {
             <TableMenu editor={editor} />
           </>
         )}
+
+        {/* 导出 PDF */}
+        <button
+          onClick={() => void handleExportPdf()}
+          disabled={exporting}
+          className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-40"
+          title="导出 PDF"
+        >
+          <FileDown className="w-4 h-4" />
+        </button>
 
         {/* 视图切换 */}
         <div className="ml-auto flex items-center gap-0.5 border border-gray-200 rounded-lg p-0.5">
@@ -379,23 +403,11 @@ function scrollToHeadingInEditor(editor: TiptapEditor, index: number) {
 }
 
 function MarkdownPreview({ md, className = "" }: { md: string; className?: string }) {
-  const html = useMemo(() => renderMarkdownWithHeadingIds(md), [md]);
+  const html = useMemo(() => renderMarkdownToHtml(md), [md]);
   return (
     <div
       className={`preview-note overflow-y-auto px-8 py-4 bg-gray-50/50 ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
-}
-
-function renderMarkdownWithHeadingIds(md: string): string {
-  const headings = extractHeadings(md);
-  let hi = 0;
-  const renderer = new marked.Renderer();
-  renderer.heading = ({ text, depth }) => {
-    const id = headings[hi]?.id ?? `heading-${hi}`;
-    hi++;
-    return `<h${depth} id="${id}">${text}</h${depth}>\n`;
-  };
-  return marked.parse(md, { renderer }) as string;
 }
