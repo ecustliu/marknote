@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { DOMParser as PMDOMParser } from "@tiptap/pm/model";
 import StarterKit from "@tiptap/starter-kit";
 import ImageExt from "@tiptap/extension-image";
 import LinkExt from "@tiptap/extension-link";
@@ -17,6 +20,38 @@ import { db } from "../lib/db";
 import type { Note } from "../types";
 
 type ViewMode = "edit" | "split" | "preview";
+
+// 粘贴时按「块级」Markdown 解析纯文本，避免 tiptap-markdown 默认的
+// inline 解析 / 富文本 HTML 回退把整段内容塞进代码块导致格式错乱。
+const MarkdownPaste = Extension.create({
+  name: "markdownPaste",
+  priority: 1000,
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+    return [
+      new Plugin({
+        key: new PluginKey("markdownPaste"),
+        props: {
+          handlePaste: (view, event) => {
+            const cd = event.clipboardData;
+            if (!cd || cd.files.length > 0) return false;
+            const text = cd.getData("text/plain");
+            if (!text) return false;
+
+            const html = editor.storage.markdown.parser.parse(text) as string;
+            const dom = document.createElement("div");
+            dom.innerHTML = html;
+            const slice = PMDOMParser.fromSchema(view.state.schema).parseSlice(dom, {
+              preserveWhitespace: false,
+            });
+            view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+            return true;
+          },
+        },
+      }),
+    ];
+  },
+});
 
 interface Props {
   note: Note;
@@ -52,7 +87,7 @@ export default function Editor({ note, userId, onSave }: Props) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit, Markdown, ImageExt,
+      StarterKit, Markdown, MarkdownPaste, ImageExt,
       LinkExt.configure({ openOnClick: false }),
       PlaceholderExt.configure({ placeholder: "开始记录… 支持完整 Markdown 语法" }),
       TaskList, TaskItem.configure({ nested: true }),
