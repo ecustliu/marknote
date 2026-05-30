@@ -1,4 +1,4 @@
-import type { DataAdapter, Note, User } from "../types";
+import type { DataAdapter, Folder, Note, User } from "../types";
 
 // 本地存储适配器：无需任何后端即可跑通「登录 + 笔记 CRUD + 图片」主线。
 // 数据存浏览器 localStorage，图片转 base64 内联。仅用于开发/演示，
@@ -7,6 +7,7 @@ import type { DataAdapter, Note, User } from "../types";
 const USERS_KEY = "marknote.users";
 const SESSION_KEY = "marknote.session";
 const NOTES_KEY = "marknote.notes";
+const FOLDERS_KEY = "marknote.folders";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -76,6 +77,7 @@ export const localAdapter: DataAdapter = {
     const all = read<Note[]>(NOTES_KEY, []);
     return all
       .filter((n) => n.userId === userId)
+      .map((n) => ({ ...n, folderId: n.folderId ?? null }))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
 
@@ -88,6 +90,7 @@ export const localAdapter: DataAdapter = {
       title: partial?.title ?? "未命名笔记",
       content: partial?.content ?? "",
       tags: partial?.tags ?? [],
+      folderId: partial?.folderId ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -104,6 +107,7 @@ export const localAdapter: DataAdapter = {
       ...all[idx],
       ...patch,
       id,
+      folderId: patch.folderId !== undefined ? patch.folderId : (all[idx].folderId ?? null),
       updatedAt: new Date().toISOString(),
     };
     all[idx] = updated;
@@ -116,6 +120,63 @@ export const localAdapter: DataAdapter = {
     write(
       NOTES_KEY,
       all.filter((n) => n.id !== id)
+    );
+  },
+
+  async listFolders(userId) {
+    const all = read<Folder[]>(FOLDERS_KEY, []);
+    return all
+      .filter((f) => f.userId === userId)
+      .map((f) => ({ ...f, parentId: f.parentId ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+  },
+
+  async createFolder(userId, partial) {
+    const all = read<Folder[]>(FOLDERS_KEY, []);
+    const now = new Date().toISOString();
+    const folder: Folder = {
+      id: uid("f_"),
+      userId,
+      name: partial?.name ?? "新建文件夹",
+      parentId: partial?.parentId ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    all.push(folder);
+    write(FOLDERS_KEY, all);
+    return folder;
+  },
+
+  async updateFolder(id, patch) {
+    const all = read<Folder[]>(FOLDERS_KEY, []);
+    const idx = all.findIndex((f) => f.id === id);
+    if (idx === -1) throw new Error("文件夹不存在");
+    const updated: Folder = {
+      ...all[idx],
+      ...patch,
+      id,
+      parentId: patch.parentId !== undefined ? patch.parentId : (all[idx].parentId ?? null),
+      updatedAt: new Date().toISOString(),
+    };
+    all[idx] = updated;
+    write(FOLDERS_KEY, all);
+    return updated;
+  },
+
+  async deleteFolder(id) {
+    const folders = read<Folder[]>(FOLDERS_KEY, []);
+    const notes = read<Note[]>(NOTES_KEY, []);
+    const target = folders.find((f) => f.id === id);
+    if (!target) return;
+
+    const parentId = target.parentId ?? null;
+    write(
+      FOLDERS_KEY,
+      folders.filter((f) => f.id !== id).map((f) => (f.parentId === id ? { ...f, parentId } : f))
+    );
+    write(
+      NOTES_KEY,
+      notes.map((n) => (n.folderId === id ? { ...n, folderId: null } : n))
     );
   },
 

@@ -1,22 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { db } from "../lib/db";
-import type { Note } from "../types";
+import type { Folder, Note } from "../types";
 
 export function useNotes(userId: string) {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let active = true;
-    db.listNotes(userId)
-      .then((list) => active && setNotes(list))
+    setLoading(true);
+
+    Promise.allSettled([db.listNotes(userId), db.listFolders(userId)])
+      .then(([notesResult, foldersResult]) => {
+        if (!active) return;
+        if (notesResult.status === "fulfilled") setNotes(notesResult.value);
+        else console.error("加载笔记失败:", notesResult.reason);
+        if (foldersResult.status === "fulfilled") setFolders(foldersResult.value);
+      })
       .finally(() => active && setLoading(false));
+
     return () => { active = false; };
   }, [userId]);
 
-  const createNote = useCallback(async () => {
-    const note = await db.createNote(userId);
+  const createNote = useCallback(async (folderId?: string | null) => {
+    const note = await db.createNote(userId, { folderId: folderId ?? null });
     setNotes((prev) => [note, ...prev]);
     return note;
   }, [userId]);
@@ -26,7 +35,6 @@ export function useNotes(userId: string) {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  // 节流保存：停止输入 800ms 后才真正写入，避免频繁请求
   const saveNote = useCallback((id: string, patch: Partial<Note>) => {
     setNotes((prev) =>
       prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: new Date().toISOString() } : n))
@@ -39,5 +47,39 @@ export function useNotes(userId: string) {
     }, 800);
   }, []);
 
-  return { notes, loading, createNote, deleteNote, saveNote };
+  const createFolder = useCallback(async (parentId?: string | null) => {
+    const folder = await db.createFolder(userId, { parentId: parentId ?? null });
+    setFolders((prev) => [...prev, folder]);
+    return folder;
+  }, [userId]);
+
+  const renameFolder = useCallback(async (id: string, name: string) => {
+    const updated = await db.updateFolder(id, { name });
+    setFolders((prev) => prev.map((f) => (f.id === id ? updated : f)));
+    return updated;
+  }, []);
+
+  const deleteFolder = useCallback(async (id: string) => {
+    await db.deleteFolder(id);
+    setFolders((prev) => {
+      const deleted = prev.find((d) => d.id === id);
+      const parentId = deleted?.parentId ?? null;
+      return prev
+        .filter((f) => f.id !== id)
+        .map((f) => (f.parentId === id ? { ...f, parentId } : f));
+    });
+    setNotes((prev) => prev.map((n) => (n.folderId === id ? { ...n, folderId: null } : n)));
+  }, []);
+
+  return {
+    notes,
+    folders,
+    loading,
+    createNote,
+    deleteNote,
+    saveNote,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+  };
 }

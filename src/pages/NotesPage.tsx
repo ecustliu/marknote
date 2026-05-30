@@ -8,13 +8,23 @@ import type { Note } from "../types";
 
 export default function NotesPage() {
   const { user, signOut } = useAuth();
-  const { notes, loading, createNote, deleteNote, saveNote } = useNotes(user!.id);
+  const {
+    notes,
+    folders,
+    loading,
+    createNote,
+    deleteNote,
+    saveNote,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+  } = useNotes(user!.id);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const activeNote = notes.find((n) => n.id === activeId) ?? null;
 
-  async function handleCreate() {
-    const note = await createNote();
+  async function handleCreate(folderId?: string | null) {
+    const note = await createNote(folderId);
     setActiveId(note.id);
   }
 
@@ -28,9 +38,13 @@ export default function NotesPage() {
       <Sidebar
         user={user!}
         notes={notes}
+        folders={folders}
         activeId={activeId}
         onSelect={setActiveId}
         onCreate={handleCreate}
+        onCreateFolder={createFolder}
+        onRenameFolder={renameFolder}
+        onDeleteFolder={deleteFolder}
         onDelete={handleDelete}
         onSignOut={signOut}
       />
@@ -42,6 +56,7 @@ export default function NotesPage() {
           <Editor
             note={activeNote}
             userId={user!.id}
+            folders={folders}
             onSave={(patch: Partial<Note>) => saveNote(activeNote.id, patch)}
           />
         ) : (

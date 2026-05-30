@@ -15,11 +15,11 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { Columns2, Eye, Image, PencilLine, Table2, Tag, X } from "lucide-react";
+import { Columns2, Eye, FolderOpen, Image, PencilLine, Table2, Tag, X } from "lucide-react";
 import { db } from "../lib/db";
 import { extractHeadings, type TocItem } from "../lib/headings";
 import TocPanel from "./TocPanel";
-import type { Note } from "../types";
+import type { Folder, Note } from "../types";
 
 type ViewMode = "edit" | "split" | "preview";
 
@@ -88,7 +88,17 @@ function createContentPasteExtension(userId: string) {
 interface Props {
   note: Note;
   userId: string;
+  folders: Folder[];
   onSave: (patch: Partial<Note>) => void;
+}
+
+function folderSelectOptions(folders: Folder[], parentId: string | null = null, depth = 0): { id: string; label: string }[] {
+  return folders
+    .filter((f) => f.parentId === parentId)
+    .flatMap((f) => [
+      { id: f.id, label: `${"　".repeat(depth)}${f.name}` },
+      ...folderSelectOptions(folders, f.id, depth + 1),
+    ]);
 }
 
 const TOOLBAR = (editor: ReturnType<typeof useEditor>) =>
@@ -109,7 +119,7 @@ const TOOLBAR = (editor: ReturnType<typeof useEditor>) =>
       ]
     : [];
 
-export default function Editor({ note, userId, onSave }: Props) {
+export default function Editor({ note, userId, folders, onSave }: Props) {
   const [title, setTitle] = useState(note.title);
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>(note.tags);
@@ -202,6 +212,21 @@ export default function Editor({ note, userId, onSave }: Props) {
           className="w-full text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder-gray-300"
         />
         <div className="flex flex-wrap items-center gap-1.5 mt-3 min-h-[24px]">
+          {folders.length > 0 && (
+            <label className="flex items-center gap-1 text-xs text-gray-500 mr-1">
+              <FolderOpen className="w-3 h-3 flex-shrink-0" />
+              <select
+                value={note.folderId ?? ""}
+                onChange={(e) => onSave({ folderId: e.target.value || null })}
+                className="bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-600 outline-none hover:border-blue-300"
+              >
+                <option value="">未分类</option>
+                {folderSelectOptions(folders).map(({ id, label }) => (
+                  <option key={id} value={id}>{label}</option>
+                ))}
+              </select>
+            </label>
+          )}
           {tags.map((tag) => (
             <span key={tag} className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
               <Tag className="w-3 h-3" />{tag}

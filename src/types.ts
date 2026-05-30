@@ -3,6 +3,16 @@ export interface User {
   email: string;
 }
 
+export interface Folder {
+  id: string;
+  userId: string;
+  name: string;
+  /** 父文件夹 ID，null 表示根级 */
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Note {
   id: string;
   userId: string;
@@ -10,6 +20,8 @@ export interface Note {
   /** Markdown 源文本，作为单一数据源 */
   content: string;
   tags: string[];
+  /** 所属文件夹，null 表示未分类 */
+  folderId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +42,12 @@ export interface DataAdapter {
   createNote(userId: string, partial?: Partial<Note>): Promise<Note>;
   updateNote(id: string, patch: Partial<Note>): Promise<Note>;
   deleteNote(id: string): Promise<void>;
+
+  // 文件夹 CRUD
+  listFolders(userId: string): Promise<Folder[]>;
+  createFolder(userId: string, partial?: Partial<Folder>): Promise<Folder>;
+  updateFolder(id: string, patch: Partial<Folder>): Promise<Folder>;
+  deleteFolder(id: string): Promise<void>;
 
   // 图片上传，返回可访问 URL
   uploadImage(userId: string, file: File): Promise<string>;
