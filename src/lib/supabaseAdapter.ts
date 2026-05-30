@@ -1,0 +1,129 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { DataAdapter, Note } from "../types";
+
+const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const bucket = (import.meta.env.VITE_SUPABASE_BUCKET as string) || "note-images";
+
+export const isSupabaseConfigured = Boolean(url && anonKey);
+
+let client: SupabaseClient | null = null;
+function db(): SupabaseClient {
+  if (!client) {
+    if (!isSupabaseConfigured) throw new Error("Supabase 未配置");
+    client = createClient(url!, anonKey!);
+  }
+  return client;
+}
+
+// 数据库行 -> 应用模型
+interface NoteRow {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  tags: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToNote(r: NoteRow): Note {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    title: r.title,
+    content: r.content ?? "",
+    tags: r.tags ?? [],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export const supabaseAdapter: DataAdapter = {
+  mode: "supabase",
+
+  async getCurrentUser() {
+    const { data } = await db().auth.getUser();
+    return data.user ? { id: data.user.id, email: data.user.email ?? "" } : null;
+  },
+
+  async signIn(email, password) {
+    const { data, error } = await db().auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    return { id: data.user!.id, email: data.user!.email ?? "" };
+  },
+
+  async signUp(email, password) {
+    const { data, error } = await db().auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    return { id: data.user!.id, email: data.user!.email ?? "" };
+  },
+
+  async signOut() {
+    await db().auth.signOut();
+  },
+
+  onAuthChange(cb) {
+    const { data } = db().auth.onAuthStateChange((_event, session) => {
+      cb(session?.user ? { id: session.user.id, email: session.user.email ?? "" } : null);
+    });
+    return () => data.subscription.unsubscribe();
+  },
+
+  async listNotes(userId) {
+    const { data, error } = await db()
+      .from("notes")
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data as NoteRow[]).map(rowToNote);
+  },
+
+  async createNote(userId, partial) {
+    const { data, error } = await db()
+      .from("notes")
+      .insert({
+        user_id: userId,
+        title: partial?.title ?? "未命名笔记",
+        content: partial?.content ?? "",
+        tags: partial?.tags ?? [],
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return rowToNote(data as NoteRow);
+  },
+
+  async updateNote(id, patch) {
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (patch.title !== undefined) payload.title = patch.title;
+    if (patch.content !== undefined) payload.content = patch.content;
+    if (patch.tags !== undefined) payload.tags = patch.tags;
+    const { data, error } = await db()
+      .from("notes")
+      .update(payload)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return rowToNote(data as NoteRow);
+  },
+
+  async deleteNote(id) {
+    const { error } = await db().from("notes").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+  },
+
+  async uploadImage(userId, file) {
+    const ext = file.name.split(".").pop() || "png";
+    const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await db().storage.from(bucket).upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (error) throw new Error(error.message);
+    const { data } = db().storage.from(bucket).getPublicUrl(path);
+    return data.publicUrl;
+  },
+};

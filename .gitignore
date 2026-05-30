@@ -1,0 +1,20 @@
+# deps
+node_modules
+# build
+dist
+dist-ssr
+# env
+.env
+.env.local
+# editor
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+# logs
+*.log
+# tauri
+src-tauri/target
+# capacitor native projects (生成物, 视需要纳入版本管理)
+ios/App/Pods
+android/.gradle
+android/app/build

@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  background: #f8fafc;
+}
+
+.safe-top    { padding-top:    env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* ── TipTap / Markdown 渲染排版 ── */
+.prose-note { line-height: 1.75; color: #1f2937; }
+.prose-note h1 { font-size: 1.6rem; font-weight: 700; margin: 1rem 0 .5rem; }
+.prose-note h2 { font-size: 1.3rem; font-weight: 700; margin: .9rem 0 .4rem; }
+.prose-note h3 { font-size: 1.1rem; font-weight: 600; margin: .8rem 0 .3rem; }
+.prose-note p  { margin: .5rem 0; }
+.prose-note ul, .prose-note ol { margin: .5rem 0; padding-left: 1.4rem; }
+.prose-note ul { list-style: disc; }
+.prose-note ol { list-style: decimal; }
+.prose-note blockquote {
+  border-left: 3px solid #cbd5e1; padding-left: .8rem; color: #64748b; margin: .6rem 0;
+}
+.prose-note pre {
+  background: #0f172a; color: #e2e8f0; padding: .9rem 1rem;
+  border-radius: .5rem; overflow-x: auto; font-size: .85rem; margin: .6rem 0;
+}
+.prose-note code { background: #eef2ff; color: #4338ca; padding: .1rem .35rem; border-radius: .3rem; font-size: .85em; }
+.prose-note pre code { background: transparent; color: inherit; padding: 0; }
+.prose-note img { max-width: 100%; border-radius: .5rem; margin: .6rem 0; }
+.prose-note a { color: #2563eb; text-decoration: underline; }
+.prose-note ul[data-type="taskList"] { list-style: none; padding-left: .2rem; }
+.prose-note ul[data-type="taskList"] li { display: flex; gap: .5rem; align-items: flex-start; }
+.prose-note .ProseMirror:focus { outline: none; }
+.prose-note .is-editor-empty:first-child::before {
+  content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none;
+}
