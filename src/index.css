@@ -42,6 +42,19 @@ body {
   content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none;
 }
 
+/* ── TipTap 表格 ── */
+.prose-note table { border-collapse: collapse; width: 100%; margin: .6rem 0; table-layout: fixed; }
+.prose-note th, .prose-note td {
+  border: 1px solid #e2e8f0; padding: .4rem .7rem; text-align: left; vertical-align: top; position: relative;
+}
+.prose-note th { background: #f8fafc; font-weight: 600; }
+.prose-note .selectedCell { background: #dbeafe; }
+.prose-note .column-resize-handle {
+  position: absolute; right: -2px; top: 0; bottom: 0; width: 4px;
+  background: #93c5fd; cursor: col-resize; z-index: 1;
+}
+.tableWrapper { overflow-x: auto; }
+
 /* ── Markdown 预览面板排版 ── */
 .preview-note { line-height: 1.75; color: #1f2937; }
 .preview-note h1 { font-size: 1.6rem; font-weight: 700; margin: 1rem 0 .5rem; }

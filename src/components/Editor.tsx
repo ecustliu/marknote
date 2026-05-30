@@ -8,7 +8,11 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
 import { marked } from "marked";
-import { Columns2, Eye, Image, PencilLine, Tag, X } from "lucide-react";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import { Columns2, Eye, Image, PencilLine, Table2, Tag, X } from "lucide-react";
 import { db } from "../lib/db";
 import type { Note } from "../types";
 
@@ -52,6 +56,8 @@ export default function Editor({ note, userId, onSave }: Props) {
       LinkExt.configure({ openOnClick: false }),
       PlaceholderExt.configure({ placeholder: "开始记录… 支持完整 Markdown 语法" }),
       TaskList, TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: true }),
+      TableRow, TableCell, TableHeader,
     ],
     content: note.content,
     editorProps: { attributes: { class: "prose-note min-h-[60vh] px-1 py-2" } },
@@ -143,6 +149,7 @@ export default function Editor({ note, userId, onSave }: Props) {
             <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" title="插入图片">
               <Image className="w-4 h-4" />
             </button>
+            <TableMenu editor={editor} />
           </>
         )}
 
@@ -186,6 +193,60 @@ export default function Editor({ note, userId, onSave }: Props) {
         <span>{new Date(note.updatedAt).toLocaleString("zh-CN")}</span>
         <span>{md.length} 字符</span>
       </div>
+    </div>
+  );
+}
+
+function TableMenu({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [open, setOpen] = useState(false);
+  if (!editor) return null;
+
+  const inTable = editor.isActive("table");
+
+  const actions = inTable
+    ? [
+        { label: "在上方插入行", cmd: () => editor.chain().focus().addRowBefore().run() },
+        { label: "在下方插入行", cmd: () => editor.chain().focus().addRowAfter().run() },
+        { label: "删除当前行",   cmd: () => editor.chain().focus().deleteRow().run() },
+        { label: "─", cmd: () => {} },
+        { label: "在左侧插入列", cmd: () => editor.chain().focus().addColumnBefore().run() },
+        { label: "在右侧插入列", cmd: () => editor.chain().focus().addColumnAfter().run() },
+        { label: "删除当前列",   cmd: () => editor.chain().focus().deleteColumn().run() },
+        { label: "─", cmd: () => {} },
+        { label: "删除表格",     cmd: () => editor.chain().focus().deleteTable().run() },
+      ]
+    : [
+        { label: "插入 3×3 表格", cmd: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+        { label: "插入 4×4 表格", cmd: () => editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run() },
+      ];
+
+  return (
+    <div className="relative">
+      <button
+        onMouseDown={(e) => { e.preventDefault(); setOpen((v) => !v); }}
+        className={`p-1.5 rounded text-gray-500 hover:bg-gray-100 ${inTable ? "bg-blue-100 text-blue-700" : ""}`}
+        title="表格"
+      >
+        <Table2 className="w-4 h-4" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]">
+            {actions.map(({ label, cmd }, i) =>
+              label === "─"
+                ? <div key={i} className="border-t border-gray-100 my-1" />
+                : (
+                  <button
+                    key={label}
+                    onMouseDown={(e) => { e.preventDefault(); cmd(); setOpen(false); }}
+                    className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >{label}</button>
+                )
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
