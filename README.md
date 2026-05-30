@@ -26,10 +26,19 @@ npm run dev          # http://localhost:5173
 
 ## 接入 Supabase（云端同步）
 
-1. 在 [supabase.com](https://supabase.com) 创建项目，进入 SQL Editor 执行 `supabase/schema.sql`
-2. 在 Storage 页面创建名为 `note-images` 的 bucket，设为 **public**
-3. 复制 `.env.example` 为 `.env.local`，填入你的 URL 和 anon key
-4. 重启 `npm run dev`，此时数据会同步到云端
+1. 在 [supabase.com/dashboard](https://supabase.com/dashboard) 创建项目
+2. **Settings → API** 复制 Project URL 和 `anon` public key
+3. 复制 `.env.example` 为 `.env.local`，填入上述两项
+4. **SQL Editor** 粘贴执行 [`supabase/schema.sql`](supabase/schema.sql)（建表 + Storage）
+5. （可选）**Authentication → Providers → Email** 关闭 **Confirm email**，开发时注册后可直接登录
+6. 验证并启动：
+
+```bash
+npm run supabase:check   # 检查连接、表、bucket 是否就绪
+npm run dev              # 登录页应显示「云端同步已启用」
+```
+
+配置生效后，应用自动从 localStorage 切换到 Supabase，无需改代码。
 
 ## 桌面端 (Mac) — 需先安装 Rust
 

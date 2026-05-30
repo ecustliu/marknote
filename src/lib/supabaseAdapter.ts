@@ -5,15 +5,38 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 const bucket = (import.meta.env.VITE_SUPABASE_BUCKET as string) || "note-images";
 
-export const isSupabaseConfigured = Boolean(url && anonKey);
+function isValidSupabaseConfig(rawUrl?: string, rawKey?: string): boolean {
+  const u = rawUrl?.trim();
+  const k = rawKey?.trim();
+  if (!u || !k) return false;
+  if (u.includes("YOUR_PROJECT") || k.includes("YOUR_ANON")) return false;
+  if (!u.startsWith("https://") || !u.includes(".supabase.co")) return false;
+  // anon key 是 JWT，长度通常 > 100
+  return k.startsWith("eyJ") && k.length > 50;
+}
+
+export const isSupabaseConfigured = isValidSupabaseConfig(url, anonKey);
 
 let client: SupabaseClient | null = null;
 function db(): SupabaseClient {
   if (!client) {
     if (!isSupabaseConfigured) throw new Error("Supabase 未配置");
-    client = createClient(url!, anonKey!);
+    client = createClient(url!, anonKey!, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
   }
   return client;
+}
+
+export class RegistrationPendingError extends Error {
+  constructor(message = "注册成功，请查收确认邮件后再登录") {
+    super(message);
+    this.name = "RegistrationPending";
+  }
 }
 
 // 数据库行 -> 应用模型
@@ -43,8 +66,10 @@ export const supabaseAdapter: DataAdapter = {
   mode: "supabase",
 
   async getCurrentUser() {
-    const { data } = await db().auth.getUser();
-    return data.user ? { id: data.user.id, email: data.user.email ?? "" } : null;
+    const { data } = await db().auth.getSession();
+    return data.session?.user
+      ? { id: data.session.user.id, email: data.session.user.email ?? "" }
+      : null;
   },
 
   async signIn(email, password) {
@@ -56,6 +81,7 @@ export const supabaseAdapter: DataAdapter = {
   async signUp(email, password) {
     const { data, error } = await db().auth.signUp({ email, password });
     if (error) throw new Error(error.message);
+    if (!data.session) throw new RegistrationPendingError();
     return { id: data.user!.id, email: data.user!.email ?? "" };
   },
 

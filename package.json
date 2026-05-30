@@ -14,7 +14,8 @@
     "tauri:build": "tauri build",
     "cap:sync": "cap sync",
     "cap:ios": "cap open ios",
-    "cap:android": "cap open android"
+    "cap:android": "cap open android",
+    "supabase:check": "node scripts/check-supabase.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

@@ -4,6 +4,15 @@ import { useAuth } from "../context/AuthContext";
 import { isCloud } from "../lib/db";
 import { BookOpen } from "lucide-react";
 
+function formatAuthError(err: unknown): string {
+  if (!(err instanceof Error)) return "操作失败";
+  const msg = err.message;
+  if (msg === "Failed to fetch" || msg.includes("NetworkError") || msg.includes("fetch")) {
+    return "无法连接 Supabase，请检查 .env.local 中的 URL 和 anon key 是否正确，并确认已执行 supabase/schema.sql";
+  }
+  return msg;
+}
+
 export default function AuthPage() {
   const { signIn, signUp, user } = useAuth();
   if (user) return <Navigate to="/" replace />;
@@ -12,17 +21,24 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setInfo("");
     setLoading(true);
     try {
       if (mode === "login") await signIn(email, password);
       else await signUp(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "操作失败");
+      if (err instanceof Error && err.name === "RegistrationPending") {
+        setInfo(err.message);
+        setMode("login");
+      } else {
+        setError(formatAuthError(err));
+      }
     } finally {
       setLoading(false);
     }
@@ -38,8 +54,11 @@ export default function AuthPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-800">Marknote</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {isCloud ? "云端同步笔记" : "本地模式（演示）"}
+            {isCloud ? "云端同步已启用" : "本地模式（演示）"}
           </p>
+          {isCloud && (
+            <p className="text-xs text-green-600 mt-1">数据保存在 Supabase 云端</p>
+          )}
         </div>
 
         {/* Card */}
@@ -77,6 +96,10 @@ export default function AuthPage() {
               <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
             )}
 
+            {info && (
+              <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">{info}</p>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -89,7 +112,7 @@ export default function AuthPage() {
           <p className="text-center text-sm text-gray-500 mt-5">
             {mode === "login" ? "还没有账号？" : "已有账号？"}
             <button
-              onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
+              onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); setInfo(""); }}
               className="text-blue-600 hover:underline ml-1 font-medium"
             >
               {mode === "login" ? "注册" : "去登录"}
