@@ -26,6 +26,11 @@ Marknote 是一款 **Markdown 云笔记应用**，核心理念：
 | 双适配器认证 | 本地模式（localStorage）与 Supabase Auth 两套实现 |
 | Session 持久化 | 云端 JWT 自动刷新；本地 session 存浏览器 |
 | 鉴权路由守卫 | 未登录跳转 `/auth`，已登录进入笔记主页 |
+| 记住登录 | 可选保存邮箱/密码到 localStorage（仅本机） |
+| 忘记密码 | `/auth/forgot-password` 发送重置邮件（云端模式） |
+| 重置密码 | `/auth/reset-password` 通过邮件链接设置新密码 |
+| 修改密码 | 侧边栏对话框，需验证当前密码 |
+| 头像上传 | 侧边栏点击头像更换；云端存 Storage + Auth metadata，本地存 base64 |
 | 退出登录 | 侧边栏一键退出 |
 | 错误提示 | 网络失败、邮箱未确认等友好文案 |
 | 模式标识 | 登录页显示「云端同步已启用」或「本地模式（演示）」 |
@@ -35,20 +40,31 @@ Marknote 是一款 **Markdown 云笔记应用**，核心理念：
 | 功能 | 说明 |
 |------|------|
 | 笔记 CRUD | 新建、编辑、删除 |
+| 软删除 / 回收站 | 删除移入回收站，支持恢复、彻底删除、清空回收站 |
+| 文件夹 | 多级文件夹，新建 / 重命名 / 删除，笔记可归属文件夹 |
+| 拖拽归类 | 侧边栏拖拽笔记到文件夹或未分类区 |
 | 自动保存 | 800ms 防抖，编辑时 UI 即时更新 |
 | 标题编辑 | 独立标题字段，失焦保存 |
 | 标签管理 | Enter / 逗号添加，可删除，随笔记持久化 |
+| 文件夹切换 | 编辑器内下拉选择所属文件夹 |
 | 列表排序 | 按 `updatedAt` 降序 |
 | 状态栏 | 显示最后更新时间与字符数 |
+| 只读分享 | 生成公开链接 `/s/:token`，访客只读预览（需云端 + schema 迁移） |
+| 导出 PDF | 编辑器工具栏一键导出当前笔记为 PDF |
 
 ### 2.3 侧边栏
 
 | 功能 | 说明 |
 |------|------|
+| 树形文件夹 | 可展开/折叠，支持嵌套子文件夹 |
 | 全文搜索 | 标题 + 内容，关键词高亮 |
 | Tag 筛选 | 点击标签过滤笔记 |
 | 笔记切换 | 点击列表项切换当前笔记 |
-| 新建 / 删除 | 快捷操作按钮 |
+| 新建笔记 / 文件夹 | 顶部快捷按钮，可在文件夹内新建 |
+| 回收站入口 | 底部入口，显示回收站笔记数量 |
+| 用户信息区 | 头像、显示名、邮箱、改密、退出 |
+| 宽度调整 | 拖拽分隔条调整宽度（200–480px） |
+| 收起 / 展开 | 一键隐藏侧栏，扩大编辑区 |
 
 ### 2.4 Markdown 编辑器（TipTap 2）
 
@@ -69,11 +85,13 @@ Marknote 是一款 **Markdown 云笔记应用**，核心理念：
 - 表格（可调整列宽，增删行列，3×3 / 4×4 快速插入）
 - 占位符提示
 
-**视图模式**
+**预览渲染**
 
 - **编辑** — 纯 WYSIWYG
 - **分屏** — 左编辑右预览
-- **预览** — 纯 Markdown 渲染（marked）
+- **预览** — Markdown 渲染（marked）
+- **KaTeX** — 行内 `$...$` 与块级 `$$...$$` 数学公式
+- **Mermaid** — 流程图、时序图等图表块
 
 **目录导航（TocPanel）**
 
@@ -83,15 +101,16 @@ Marknote 是一款 **Markdown 云笔记应用**，核心理念：
 
 ### 2.5 存储与同步
 
-| 模式 | 用户 | 笔记 | 图片 |
-|------|------|------|------|
-| **本地模式** | localStorage（含演示用明文密码） | 全量 JSON 数组 | base64 嵌在 content |
-| **云端模式** | Supabase Auth | Postgres + RLS | Storage `note-images` bucket |
+| 模式 | 用户 | 笔记 / 文件夹 | 图片 | 头像 |
+|------|------|---------------|------|------|
+| **本地模式** | localStorage（含演示用明文密码） | 全量 JSON 数组 | base64 嵌在 content | base64 存 users |
+| **云端模式** | Supabase Auth | Postgres + RLS | Storage `note-images` | Storage + `user_metadata.avatar_url` |
 
 **云端安全**
 
-- RLS：用户只能读写自己的笔记
+- RLS：用户只能读写自己的笔记与文件夹
 - Storage 按 `user_id` 目录隔离
+- 分享通过 `get_shared_note` RPC（SECURITY DEFINER）按 token 只读访问
 - API Key 校验（拒绝 `sb_secret_`，支持新版 publishable key 与 legacy JWT）
 
 **开发工具**
@@ -99,7 +118,17 @@ Marknote 是一款 **Markdown 云笔记应用**，核心理念：
 - `npm run supabase:setup` — 交互式配置 `.env.local`
 - `npm run supabase:check` — 检查连接、表、bucket
 
-### 2.6 跨端支持
+### 2.6 路由
+
+| 路径 | 说明 |
+|------|------|
+| `/auth` | 登录 / 注册 |
+| `/auth/forgot-password` | 忘记密码 |
+| `/auth/reset-password` | 邮件链接重置密码 |
+| `/s/:token` | 公开只读分享页 |
+| `/*` | 笔记主页（需登录） |
+
+### 2.7 跨端支持
 
 | 平台 | 状态 |
 |------|------|
@@ -114,9 +143,9 @@ Marknote 是一款 **Markdown 云笔记应用**，核心理念：
 ## 3. 技术特性摘要
 
 ```
-UI 层          AuthPage · NotesPage · Sidebar · Editor · TocPanel
+UI 层          AuthPage · NotesPage · SharePage · Sidebar · Editor · TocPanel · SharePanel
      ↓
-业务层         AuthContext · useNotes（800ms 防抖）
+业务层         AuthContext · useNotes（800ms 防抖）· useSidebarLayout
      ↓
 存储层         db.ts → localAdapter | supabaseAdapter
                     → Supabase Auth · Postgres + RLS · Storage
@@ -125,9 +154,10 @@ UI 层          AuthPage · NotesPage · Sidebar · Editor · TocPanel
 | 类别 | 技术 |
 |------|------|
 | 前端 | React 18 + TypeScript + Vite 5 + Tailwind CSS 3 |
-| 路由 | React Router 6（`/auth` + 通配主页） |
+| 路由 | React Router 6 |
 | 编辑器 | TipTap 2 + tiptap-markdown |
-| 预览 | marked 14 |
+| 预览 | marked 14 + KaTeX + Mermaid |
+| PDF 导出 | html2canvas + jsPDF |
 | 桌面壳 | Tauri 2 |
 | 移动壳 | Capacitor |
 | 后端 | Supabase（Auth + Postgres + Storage） |
@@ -138,30 +168,42 @@ UI 层          AuthPage · NotesPage · Sidebar · Editor · TocPanel
 
 ## 4. 已知限制
 
-以下在文档或代码中有设计，但尚未完整落地：
+以下在代码或产品层面尚未完整落地：
 
 | 项 | 现状 |
 |----|------|
-| 移动端只读视图 | `platform.ts` 有 `canFullEdit()`，但未被 Editor 引用，窄屏 / 原生端仍会加载完整编辑器 |
+| 保存状态反馈 | 自动保存无 saving / saved / failed 指示，失败时静默 |
+| 多标签页 / 多设备同步 | 无跨标签实时刷新，无编辑冲突检测 |
+| 笔记 deep link | 无 `/notes/:id` 路由，刷新后不恢复当前选中笔记 |
+| 移动端只读视图 | `platform.ts` 有 `canFullEdit()`，但未被 Editor 引用，窄屏仍会加载完整编辑器 |
 | PWA | 无 manifest / Service Worker |
 | 服务端全文搜索 | DB 有 FTS 索引，前端未用 Supabase RPC |
-| 文件夹 / 笔记本 | 扁平笔记列表，无层级 |
-| 离线同步 | 云端模式需联网 |
-| 实时协作 | 未实现 |
-| 微信 / OAuth 登录 | 未实现 |
+| Markdown 导入 / 导出 | 有 PDF 导出，无 `.md` 单篇/批量导入导出 |
+| 离线同步 | 云端模式需联网，无 IndexedDB 本地缓存 |
+| 实时协作 | 分享为只读，不支持多人同时编辑 |
+| OAuth 登录 | 仅邮箱密码，无微信 / Google 等 |
+| 预览代码高亮 | 代码块无语法着色 |
+| 编辑器快捷键 | 无 Cmd+S 保存提示、Markdown 快捷输入等 |
+| 图片压缩 | 上传无大小限制与压缩 |
+| 版本历史 | 无修订记录与回滚 |
+| 深色模式 | 未实现 |
+| 自动化测试 | 无单元 / E2E 测试 |
 
 ---
 
 ## 5. 未来规划
 
-### 5.1 二期
+### 5.1 二期（Web 体验优先）
 
 | 优先级 | 功能 | 说明 |
 |--------|------|------|
-| 🔴 高 | 移动端只读渲染 | 接入 `canFullEdit()`，窄屏 / Capacitor 只显示 Markdown 预览 + 列表 |
-| 🔴 高 | PWA | manifest、离线缓存、可安装到主屏幕 |
+| 🔴 高 | 保存状态与失败重试 | 显示 saving/saved/failed，网络失败可重试 |
+| 🔴 高 | 笔记 URL 路由 | `/notes/:id`，刷新与书签可恢复上下文 |
+| 🔴 高 | Markdown 导入 / 导出 | 单篇或批量 `.md`，与 Markdown 定位一致 |
+| 🔴 高 | 移动端只读渲染 | 接入 `canFullEdit()`，窄屏只显示列表 + 预览 |
+| 🟡 中 | PWA | manifest、离线缓存、可安装到主屏幕 |
 | 🟡 中 | 响应式布局 | 移动端侧栏抽屉、触控优化 |
-| 🟡 中 | 导出 / 导入 | 单篇或批量导出 `.md`，从文件导入 |
+| 🟡 中 | 服务端全文搜索 | 利用已有 FTS 索引，Supabase RPC |
 | 🟡 中 | 笔记置顶 / 收藏 | 常用笔记快速访问 |
 | 🟢 低 | 深色模式 | 跟随系统或手动切换 |
 
@@ -170,29 +212,25 @@ UI 层          AuthPage · NotesPage · Sidebar · Editor · TocPanel
 | 优先级 | 功能 | 说明 |
 |--------|------|------|
 | 🔴 高 | 离线同步 | IndexedDB 本地缓存 + 冲突合并策略 |
-| 🔴 高 | 实时协作 / CRDT | 多人编辑同一笔记（Yjs / Automerge 等） |
-| 🟡 中 | 微信 OAuth 登录 | 新增 Adapter 或 Supabase Provider |
-| 🟡 中 | 服务端全文搜索 | 利用已有 FTS 索引，Supabase RPC |
-| 🟡 中 | 文件夹 / 笔记本 | 笔记分组、树形侧栏 |
+| 🔴 高 | 多设备冲突提示 | 远端更新检测、保存失败告警 |
+| 🟡 中 | 实时协作 / CRDT | 多人编辑同一笔记（Yjs / Automerge 等） |
+| 🟡 中 | OAuth 登录 | 微信 / Google 等 Provider |
 | 🟢 低 | 版本历史 | 笔记修订记录与回滚 |
-| 🟢 低 | 分享链接 | 只读公开链接（需 RLS / 公开表扩展） |
 
 ### 5.3 编辑器与体验增强
 
 - 快捷键（Cmd+S 保存提示、Markdown 快捷输入）
-- 代码块语法高亮（预览侧）
-- 数学公式（KaTeX / MathJax）
-- Mermaid 图表渲染
+- 预览侧代码块语法高亮
+- 链接插入 UI（选中文本 → 填写 URL）
 - 附件上传（非图片文件）
-- 回收站 / 软删除
-- 多设备冲突提示（保存失败重试）
+- 图片压缩与大小限制
+- 删除撤销提示、笔记复制
 
 ### 5.4 工程与运维
 
 - 单元 / E2E 测试（编辑器、Adapter、Auth 流程）
 - CI/CD（build + lint + supabase:check）
 - 环境分离（dev / staging / prod）
-- 图片压缩与大小限制
 - Capacitor 热更新配置（dev server 已预留注释）
 
 ---
@@ -201,13 +239,13 @@ UI 层          AuthPage · NotesPage · Sidebar · Editor · TocPanel
 
 | 模块 | 完成度 | 备注 |
 |------|--------|------|
-| 认证与账户 | 80% | 缺 OAuth、密码重置 |
-| 笔记 CRUD | 90% | 缺文件夹、回收站 |
-| 编辑器 | 85% | 缺公式、Mermaid、快捷键 |
-| 搜索与组织 | 60% | 客户端搜索，无文件夹 |
-| 跨端 | 50% | 壳就绪，移动端体验未完善 |
-| 云端同步 | 70% | 无离线、无冲突处理 |
-| 协作与分享 | 0% | 规划中 |
+| 认证与账户 | 90% | 缺 OAuth；头像、改密、重置密码已支持 |
+| 笔记 CRUD | 95% | 含文件夹、回收站、分享、PDF 导出 |
+| 编辑器 | 90% | 含 KaTeX、Mermaid；缺快捷键、代码高亮 |
+| 搜索与组织 | 75% | 客户端搜索 + 文件夹；缺置顶、服务端 FTS |
+| 跨端 | 50% | 壳就绪，移动端 Web 体验未完善 |
+| 云端同步 | 75% | 基本同步可用；无离线、无冲突处理、无保存反馈 |
+| 协作与分享 | 40% | 只读分享已实现；无协作编辑 |
 
 ---
 
@@ -218,4 +256,4 @@ UI 层          AuthPage · NotesPage · Sidebar · Editor · TocPanel
 
 ---
 
-*文档更新时间：2026-05-30 · Marknote v0.1.0*
+*文档更新时间：2026-05-31 · Marknote v0.1.0*

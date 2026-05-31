@@ -10,35 +10,47 @@ Marknote 是一款支持 Markdown 的笔记应用，核心设计目标：
 - **一套代码，多端运行**：Web 浏览器、Mac 桌面（Tauri）、移动端（Capacitor）
 - **双模式存储**：未配置后端时用 localStorage 演示；配置 Supabase 后自动切换云端同步
 - **Markdown 为单一数据源**：编辑器 WYSIWYG 编辑，底层存 Markdown 文本
-- **适配器模式**：业务层只依赖 DataAdapter 接口，存储实现可替换
+- **适配器模式**：业务层只依赖 `DataAdapter` 接口，存储实现可替换
 
 ## 2. 技术栈
 
-- **前端框架**：React 18 + TypeScript（函数组件 + Hooks）
-- **构建工具**：Vite 5（开发服务器 + 生产打包）
-- **样式**：Tailwind CSS 3
-- **路由**：React Router 6（/auth 登录页，通配路由笔记主页）
-- **编辑器**：TipTap 2 + tiptap-markdown（WYSIWYG，导出 Markdown）
-- **Markdown 预览**：marked 14（分屏 / 纯预览模式渲染）
-- **图标**：lucide-react
-- **云端后端**：Supabase（Auth + Postgres + Storage）
-- **本地存储**：localStorage（零配置演示模式）
-- **桌面壳**：Tauri 2（Mac .app 打包）
-- **移动壳**：Capacitor（iOS / Android 原生壳）
+| 类别 | 技术 |
+|------|------|
+| 前端框架 | React 18 + TypeScript（函数组件 + Hooks） |
+| 构建工具 | Vite 5 |
+| 样式 | Tailwind CSS 3 |
+| 路由 | React Router 6 |
+| 编辑器 | TipTap 2 + tiptap-markdown |
+| Markdown 预览 | marked 14 |
+| 数学公式 | KaTeX |
+| 图表 | Mermaid 11 |
+| PDF 导出 | html2canvas + jsPDF |
+| 图标 | lucide-react |
+| 云端后端 | Supabase（Auth + Postgres + Storage） |
+| 本地存储 | localStorage |
+| 桌面壳 | Tauri 2 |
+| 移动壳 | Capacitor |
 
 ## 3. 系统架构
 
 分层结构（自上而下）：
 
-- **UI Layer**：AuthPage · NotesPage · Sidebar · Editor
-- **Context / Hooks**：AuthContext（认证状态）· useNotes（笔记 CRUD + 防抖保存）
-- **db.ts（统一入口）**：isSupabaseConfigured ? supabaseAdapter : localAdapter
-- **localAdapter**：localStorage（本地演示）
-- **supabaseAdapter**：Supabase JS Client → Supabase Cloud（Auth · Postgres · Storage）
+```
+UI Layer       AuthPage · ForgotPasswordPage · ResetPasswordPage
+               NotesPage · SharePage
+               Sidebar · Editor · TocPanel · SharePanel · MarkdownPreview
+     ↓
+Context/Hooks  AuthContext · useNotes（800ms 防抖）· useSidebarLayout
+     ↓
+db.ts          isSupabaseConfigured ? supabaseAdapter : localAdapter
+     ↓
+localAdapter   localStorage
+supabaseAdapter Supabase JS Client → Auth · Postgres · Storage
+```
 
-## 3.1 适配器切换逻辑
+### 3.1 适配器切换逻辑
 
-应用启动时读取 .env.local：
+应用启动时读取 `.env.local`：
 
 ```typescript
 // src/lib/db.ts
@@ -46,165 +58,282 @@ export const db = isSupabaseConfigured ? supabaseAdapter : localAdapter;
 export const isCloud = db.mode === "supabase";
 ```
 
-Supabase 配置校验（src/lib/supabaseConfig.ts）要求：
+Supabase 配置校验（`src/lib/supabaseConfig.ts`）要求：
 
-- URL 形如 https://xxx.supabase.co
-- Key 为 sb_publishable_...（新版）或 eyJ...（legacy anon JWT）
-- 拒绝 sb_secret_...（服务端密钥，不可用于前端）
+- URL 形如 `https://xxx.supabase.co`
+- Key 为 `sb_publishable_...`（新版）或 `eyJ...`（legacy anon JWT）
+- 拒绝 `sb_secret_...`（服务端密钥，不可用于前端）
 
 ## 4. 目录结构
 
-- **marknote/**
-  - **src/** — 前端源码
-    - App.tsx — 路由 + 鉴权守卫
-    - main.tsx — 入口
-    - types.ts — User / Note / DataAdapter 类型
-    - **components/** — Editor、Sidebar
-    - **context/** — AuthContext
-    - **hooks/** — useNotes（800ms 防抖保存）
-    - **lib/** — db、localAdapter、supabaseAdapter、platform
-    - **pages/** — AuthPage、NotesPage
-  - **supabase/** — schema.sql 建表 + RLS + Storage
-  - **scripts/** — check-supabase.mjs、setup-supabase.mjs
-  - **src-tauri/** — Tauri 桌面壳
-  - capacitor.config.ts — Capacitor 配置
-  - .env.example — 环境变量模板
+```
+marknote/
+├── src/
+│   ├── App.tsx                 # 路由 + 鉴权守卫
+│   ├── main.tsx
+│   ├── types.ts                # User / Folder / Note / DataAdapter
+│   ├── components/
+│   │   ├── AuthShell.tsx
+│   │   ├── ChangePasswordDialog.tsx
+│   │   ├── Editor.tsx
+│   │   ├── MarkdownPreview.tsx
+│   │   ├── SharePanel.tsx
+│   │   ├── Sidebar.tsx
+│   │   └── TocPanel.tsx
+│   ├── context/
+│   │   └── AuthContext.tsx
+│   ├── hooks/
+│   │   ├── useNotes.ts         # 800ms 防抖保存
+│   │   └── useSidebarLayout.ts
+│   ├── lib/
+│   │   ├── avatar.ts           # 头像文件校验
+│   │   ├── authErrors.ts
+│   │   ├── db.ts
+│   │   ├── exportPdf.ts
+│   │   ├── headings.ts
+│   │   ├── localAdapter.ts
+│   │   ├── markdownRender.ts   # marked + KaTeX + Mermaid 预处理
+│   │   ├── mathRender.ts
+│   │   ├── mermaidDetect.ts
+│   │   ├── mermaidRender.ts
+│   │   ├── platform.ts
+│   │   ├── savedLogin.ts
+│   │   ├── shareErrors.ts
+│   │   ├── shareToken.ts
+│   │   ├── supabaseAdapter.ts
+│   │   └── supabaseConfig.ts
+│   └── pages/
+│       ├── AuthPage.tsx
+│       ├── ForgotPasswordPage.tsx
+│       ├── NotesPage.tsx
+│       ├── ResetPasswordPage.tsx
+│       └── SharePage.tsx
+├── supabase/schema.sql         # 建表 + RLS + Storage + RPC
+├── scripts/                    # check-supabase / setup-supabase
+├── src-tauri/                  # Tauri 桌面壳
+├── capacitor.config.ts
+└── .env.example
+```
 
-## 5. 数据模型
+## 5. 路由
 
-### 5.1 User（用户）
+| 路径 | 组件 | 说明 |
+|------|------|------|
+| `/auth` | AuthPage | 登录 / 注册 |
+| `/auth/forgot-password` | ForgotPasswordPage | 发送重置邮件（云端） |
+| `/auth/reset-password` | ResetPasswordPage | 邮件链接设置新密码 |
+| `/s/:token` | SharePage | 公开只读分享页 |
+| `/*` | NotesPage | 笔记主页（RequireAuth） |
+
+## 6. 数据模型
+
+### 6.1 User（用户）
 
 ```typescript
 interface User {
   id: string;
   email: string;
+  avatarUrl?: string | null;  // 未设置时为 null
 }
 ```
 
-### 5.2 Note（笔记）
+### 6.2 Folder（文件夹）
+
+```typescript
+interface Folder {
+  id: string;
+  userId: string;
+  name: string;
+  parentId: string | null;    // null 表示根级
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### 6.3 Note（笔记）
 
 ```typescript
 interface Note {
   id: string;
   userId: string;
   title: string;
-  content: string;      // Markdown 源文本
+  content: string;            // Markdown 源文本
   tags: string[];
-  createdAt: string;    // ISO 8601
+  folderId: string | null;
+  deletedAt: string | null;   // 软删除时间戳
+  shareToken: string | null;  // 只读分享 token
+  createdAt: string;
   updatedAt: string;
 }
 ```
 
-### 5.3 Postgres 表结构（云端）
+### 6.4 SharedNote（分享页展示）
 
-- **id**（uuid）— 主键，自动生成
-- **user_id**（uuid）— 关联 auth.users
-- **title**（text）— 标题
-- **content**（text）— Markdown 正文
-- **tags**（text[]）— 标签数组
-- **created_at**（timestamptz）— 创建时间
-- **updated_at**（timestamptz）— 更新时间（触发器自动维护）
+不含 `userId` 等敏感字段，由 `get_shared_note` RPC 返回。
 
-**安全策略（RLS）**：每个用户只能读写 user_id = auth.uid() 的笔记。
+### 6.5 Postgres 表结构（云端）
 
-## 6. 存储与持久化
+**folders**
 
-### 6.1 本地模式（localAdapter）
+| 列 | 类型 | 说明 |
+|----|------|------|
+| id | uuid | 主键 |
+| user_id | uuid | 关联 auth.users |
+| name | text | 文件夹名 |
+| parent_id | uuid | 父文件夹，可 null |
+| created_at / updated_at | timestamptz | 时间戳 |
 
-- **用户列表** → marknote.users（含明文密码，仅演示）
-- **当前会话** → marknote.session
-- **笔记** → marknote.notes（全量 JSON 数组）
-- **图片** → 嵌在 content 中（base64 Data URL）
+**notes**
 
-**特点**：零配置、刷新不丢数据，但仅限本浏览器，清缓存即丢失。
+| 列 | 类型 | 说明 |
+|----|------|------|
+| id | uuid | 主键 |
+| user_id | uuid | 关联 auth.users |
+| title | text | 标题 |
+| content | text | Markdown 正文 |
+| tags | text[] | 标签 |
+| folder_id | uuid | 所属文件夹，可 null |
+| deleted_at | timestamptz | 回收站时间戳，null 表示未删除 |
+| share_token | text | 分享 token，唯一索引（partial） |
+| created_at / updated_at | timestamptz | 时间戳 |
 
-### 6.2 云端模式（supabaseAdapter）
+**索引**
 
-- **账户** → Supabase Auth（JWT Session，自动刷新）
-- **笔记** → Postgres notes 表（RLS 隔离）
-- **图片** → Storage note-images bucket（公开读，按 user_id 目录隔离写）
+- `notes_fts` — GIN 全文索引（`to_tsvector`，前端尚未使用）
+- `notes_user_active` / `notes_user_trash` — 活跃笔记与回收站列表
 
-**环境变量**（.env.local）：
+**RPC**
+
+- `get_shared_note(p_token)` — SECURITY DEFINER，按 token 只读返回分享笔记
+
+**RLS**：用户只能读写 `user_id = auth.uid()` 的笔记与文件夹。
+
+## 7. 存储与持久化
+
+### 7.1 本地模式（localAdapter）
+
+| 键名 | 内容 |
+|------|------|
+| `marknote.users` | 用户列表（含明文密码、avatarUrl，仅演示） |
+| `marknote.session` | 当前登录用户 |
+| `marknote.notes` | 笔记全量 JSON 数组 |
+| `marknote.folders` | 文件夹全量 JSON 数组 |
+| `marknote-sidebar` | 侧栏宽度与收起状态 |
+
+- **图片**：base64 Data URL 嵌入 `content`
+- **头像**：base64 存在 `users[].avatarUrl`
+
+### 7.2 云端模式（supabaseAdapter）
+
+| 资源 | 存储 |
+|------|------|
+| 账户 | Supabase Auth（JWT，自动刷新） |
+| 笔记 / 文件夹 | Postgres + RLS |
+| 笔记图片 | Storage `note-images` bucket，`{userId}/{timestamp}-{random}.{ext}` |
+| 头像 | 同 bucket，`{userId}/avatar.{ext}`；URL 写入 `user_metadata.avatar_url` |
+
+Storage 策略：公开读；写操作限制为 `authenticated` 且路径首段等于 `auth.uid()`。
+
+**环境变量**（`.env.local`）：
 
 ```env
 VITE_SUPABASE_URL=https://xxx.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_...
 VITE_SUPABASE_BUCKET=note-images
+
+# 可选：分享链接的公开域名，留空则用 window.location.origin
+VITE_PUBLIC_URL=https://your-deployed-site.com
 ```
 
-### 6.3 自动保存机制
+### 7.3 自动保存机制
 
-useNotes 采用 **800ms 防抖**：
+`useNotes` 采用 **800ms 防抖**：
 
-1. 编辑时立即更新 React 状态（UI 无延迟）
-2. 停止输入 800ms 后调用 db.updateNote() 持久化
-3. 本地模式写 localStorage；云端模式发 Supabase REST 请求
+1. 编辑时立即更新 React 状态
+2. 停止输入 800ms 后调用 `db.updateNote()` 持久化
+3. 本地写 localStorage；云端发 Supabase REST 请求
 
-## 7. 认证流程
+> 当前无 saving / saved / failed 状态反馈，保存失败时静默（见已知限制）。
 
-1. 用户打开应用
-2. AuthContext.getCurrentUser() 检查 session
-3. **有 session** → 进入 NotesPage
-4. **无 session** → 跳转 /auth → 登录或注册
-5. 调用 db.signIn / db.signUp
-   - 本地模式：localAdapter 读写 localStorage
-   - 云端模式：supabaseAdapter 调用 Supabase Auth API
+## 8. 认证流程
 
-**常见错误处理**（AuthPage）：
+1. `AuthContext.getCurrentUser()` 检查 session
+2. 有 session → `NotesPage`；无 session → `/auth`
+3. `db.signIn` / `db.signUp` 按适配器读写 session
+4. **忘记密码**：`requestPasswordReset` → 邮件链接 → `/auth/reset-password` → `updatePassword`（不传 currentPassword）
+5. **修改密码**：侧边栏 `ChangePasswordDialog` → `updatePassword(new, current)`
+6. **头像**：`uploadAvatar` → Storage（云端）或 base64（本地）→ 更新 session
 
-- **Failed to fetch** → 检查 .env.local 与 schema.sql
-- **Email not confirmed** → 查收确认邮件，或关闭 Confirm email
+**常见错误**（`AuthPage` / `formatAuthError`）：
 
-## 8. 编辑器能力
+- `Failed to fetch` → 检查 `.env.local` 与网络
+- `Email not confirmed` → 查收确认邮件，或关闭 Confirm email
 
-基于 **TipTap 2**，支持以下 Markdown 能力：
+## 9. 编辑器与预览
 
-### 8.1 文本格式
+### 9.1 TipTap 扩展
 
-- **粗体**、*斜体*、~~删除线~~、行内代码
-- 标题 H1 / H2 / H3
-- 有序列表、无序列表
-- 任务列表（可嵌套）
-- 引用块、代码块
+StarterKit、Markdown、Image、Link、Placeholder、TaskList/TaskItem、Table 系列、自定义粘贴插件（图片上传 + Markdown 块级解析）。
 
-### 8.2 扩展功能
+### 9.2 预览渲染管线
 
-- 链接插入
-- 图片上传（本地 base64 / 云端 Storage）
-- 表格（可调整列宽，支持增删行列）
-- 三种视图模式：**编辑** / **分屏** / **预览**
+```
+Markdown 源文本
+  → markdownRender.ts
+      preprocessMarkdownForMermaid
+      preprocessMath（KaTeX 占位）
+      marked（自定义 heading id、Mermaid code 块）
+      applyMathToHtml
+  → MarkdownPreview 组件
+      renderMermaidIn（客户端渲染 Mermaid SVG）
+```
 
-### 8.3 数据流
+### 9.3 数据流
 
-1. TipTap 编辑
-2. tiptap-markdown → getMarkdown()
-3. onSave({ content, title, tags })
-4. useNotes.saveNote() → db.updateNote()
+1. TipTap 编辑 → `editor.storage.markdown.getMarkdown()`
+2. `onSave({ content, title, tags, folderId })`
+3. `useNotes.saveNote()` → 800ms 防抖 → `db.updateNote()`
 
-## 9. 侧边栏功能
+### 9.4 PDF 导出
 
-- 笔记列表（按 updatedAt 降序）
-- 全文搜索（标题 + 内容，关键词高亮）
-- Tag 筛选（点击 Tag 按钮过滤）
-- 新建 / 删除笔记
-- 退出登录
+`exportPdf.ts`：将 Markdown 渲染为 HTML 后通过 html2canvas 截图，jsPDF 生成 PDF。
 
-## 10. 平台策略
+## 10. 分享机制
 
-platform.ts 定义能力分级：
+1. 用户在编辑器开启分享 → `enableShare(noteId)` 生成 32 位 hex `shareToken` 写入笔记
+2. `buildShareUrl(token)` 拼接 `{VITE_PUBLIC_URL || origin}/s/{token}`
+3. 访客访问 `SharePage` → `db.getSharedNote(token)` → 云端调用 `get_shared_note` RPC
+4. 关闭分享 → `disableShare` 将 `shareToken` 置 null
 
-- **桌面浏览器** — 完整编辑 ✅
-- **Tauri 桌面** — 完整编辑 ✅
-- **手机浏览器（小于 640px）** — 只读 ❌
-- **Capacitor 原生** — 只读（二期完善）❌
+本地模式同样支持分享 token，但链接仅在本机有效。
 
-## 11. 开发与部署命令
+## 11. 侧边栏与布局
+
+- 树形文件夹（展开/折叠、嵌套、重命名、删除）
+- 笔记拖拽到文件夹（`application/x-marknote-note-id` MIME）
+- 客户端全文搜索 + Tag 筛选
+- 回收站视图（恢复 / 彻底删除 / 清空）
+- `useSidebarLayout`：宽度 200–480px、收起状态持久化到 localStorage
+
+## 12. 平台策略
+
+`platform.ts` 定义能力分级：
+
+| 环境 | `canFullEdit()` | 实际行为 |
+|------|-----------------|----------|
+| 桌面浏览器 | true | 完整编辑器 ✅ |
+| Tauri 桌面 | true | 完整编辑器 ✅ |
+| 手机浏览器（< 640px） | false | 仍加载完整编辑器 ⚠️ 未接入 |
+| Capacitor 原生 | false | 仍加载完整编辑器 ⚠️ 未接入 |
+
+## 13. 开发与部署命令
 
 ```bash
 npm install
 npm run dev
 npm run build
 npm run preview
+npm run lint
 npm run supabase:setup
 npm run supabase:check
 npm run tauri:dev
@@ -214,53 +343,83 @@ npm run cap:ios
 npm run cap:android
 ```
 
-## 12. Supabase 接入步骤
+## 14. Supabase 接入步骤
 
-1. 在 supabase.com/dashboard 创建项目
+1. 在 [supabase.com/dashboard](https://supabase.com/dashboard) 创建项目
 2. Settings → API Keys 复制 Project URL 和 Publishable key
-3. SQL Editor 执行 supabase/schema.sql
+3. SQL Editor 执行 `supabase/schema.sql`
 4. （推荐）Authentication → Providers → Email 关闭 Confirm email
-5. 运行 npm run supabase:setup 或手动填写 .env.local
-6. 重启 npm run dev，登录页显示「云端同步已启用」
+5. Authentication → URL Configuration 添加 `{origin}/auth/reset-password` 为 Redirect URL
+6. 运行 `npm run supabase:setup` 或手动填写 `.env.local`
+7. `npm run supabase:check` 验证连接、表、bucket
+8. 重启 `npm run dev`，登录页显示「云端同步已启用」
 
-## 13. DataAdapter 接口
+## 15. DataAdapter 接口
 
-所有存储实现必须满足：
+所有存储实现必须满足（节选）：
 
 ```typescript
 interface DataAdapter {
   readonly mode: "local" | "supabase";
 
+  // 认证
   getCurrentUser(): Promise<User | null>;
   signIn(email, password): Promise<User>;
   signUp(email, password): Promise<User>;
   signOut(): Promise<void>;
+  requestPasswordReset(email): Promise<void>;
+  updatePassword(newPassword, currentPassword?): Promise<void>;
+  uploadAvatar(userId, file): Promise<User>;
   onAuthChange(cb): () => void;
 
+  // 笔记
   listNotes(userId): Promise<Note[]>;
+  listTrashedNotes(userId): Promise<Note[]>;
   createNote(userId, partial?): Promise<Note>;
   updateNote(id, patch): Promise<Note>;
-  deleteNote(id): Promise<void>;
+  deleteNote(id): Promise<void>;           // 软删除
+  restoreNote(id): Promise<Note>;
+  permanentlyDeleteNote(id): Promise<void>;
+  emptyTrash(userId): Promise<void>;
 
+  // 文件夹
+  listFolders(userId): Promise<Folder[]>;
+  createFolder(userId, partial?): Promise<Folder>;
+  updateFolder(id, patch): Promise<Folder>;
+  deleteFolder(id): Promise<void>;
+
+  // 媒体与分享
   uploadImage(userId, file): Promise<string>;
+  enableShare(noteId): Promise<Note>;
+  disableShare(noteId): Promise<Note>;
+  getSharedNote(token): Promise<SharedNote | null>;
 }
 ```
 
-扩展新后端（如微信登录、自建 API）只需新增 Adapter 实现，UI 层无需改动。
+扩展新后端（OAuth、自建 API）只需新增 Adapter 实现，UI 层无需改动。
 
-## 14. 功能路线图
+## 16. 已知限制与路线图
 
-- ✅ 邮箱登录、笔记 CRUD、TipTap 编辑器、表格、分屏预览
-- ✅ Tag 管理、全文搜索、Supabase 云端同步
-- ✅ Tauri / Capacitor 壳配置
-- 🔲 二期：移动端只读渲染视图、PWA
-- 🔲 三期：实时协作 / CRDT、微信登录
+**已知限制**
 
-## 15. Markdown 渲染测试区
+- 保存无状态反馈，失败静默；无多设备冲突检测
+- 无 `/notes/:id` deep link
+- 搜索为客户端全量过滤，FTS 索引未用
+- 无 `.md` 导入导出（已有 PDF 导出）
+- 云端模式需联网，无 PWA / IndexedDB 离线缓存
+- `canFullEdit()` 未接入 Editor
+- 预览代码块无语法高亮；无自动化测试
+
+**路线图摘要**（详见 [FEATURES.md](./FEATURES.md)）
+
+- 🔲 二期：保存反馈、笔记 URL、Markdown 导入导出、移动端只读、PWA、服务端 FTS
+- 🔲 三期：离线同步、冲突提示、实时协作、OAuth、版本历史
+
+## 17. Markdown 渲染测试区
 
 本节用于测试编辑器对 Markdown 的解析与渲染效果。
 
-### 15.1 代码块
+### 17.1 代码块
 
 ```javascript
 const saveNote = (id, patch) => {
@@ -273,31 +432,37 @@ const saveNote = (id, patch) => {
 SELECT id, title, updated_at
 FROM notes
 WHERE user_id = auth.uid()
+  AND deleted_at IS NULL
 ORDER BY updated_at DESC;
 ```
 
-### 15.2 列表对比
+### 17.2 数学公式（KaTeX）
 
-- **本地模式**：localStorage，不支持跨设备
-- **云端模式**：Supabase Auth + Postgres，支持跨设备
+行内：$E = mc^2$
 
-### 15.3 任务列表
+块级：
+
+$$
+\int_0^1 x^2 \, dx = \frac{1}{3}
+$$
+
+### 17.3 任务列表
 
 - [x] 项目初始化
 - [x] Supabase 云端接入
-- [x] 表格编辑器
-- [ ] 微信 OAuth 登录
+- [x] 文件夹与回收站
+- [x] 只读分享链接
+- [x] KaTeX 与 Mermaid 预览
+- [ ] 服务端全文搜索
 - [ ] 离线同步
 
-### 15.4 引用与链接
+### 17.4 引用与链接
 
 > 好的架构不是预测未来，而是让变化变得廉价。  
 > —— 适配器模式的核心价值
 
 相关链接：[Supabase 文档](https://supabase.com/docs) · [TipTap 文档](https://tiptap.dev)
 
-### 15.5 混排示例
+---
 
-**Marknote** 是一款 React + TypeScript 笔记应用，支持 ~~本地演示~~ **云端同步**，使用 sb_publishable_ 或 eyJ 格式的 API Key 连接 Supabase。
-
-*文档生成时间：2026-05-30 · Marknote v0.1.0*
+*文档更新时间：2026-05-31 · Marknote v0.1.0*
