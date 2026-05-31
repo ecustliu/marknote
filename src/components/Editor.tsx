@@ -44,7 +44,9 @@ function getClipboardImageFile(cd: DataTransfer): File | null {
   return null;
 }
 
-/** 粘贴：截图/图片走 uploadImage；纯文本走块级 Markdown 解析 */
+/** 粘贴：截图/图片走 uploadImage；纯文本走块级 Markdown 解析
+ *  复制：拦截 copy/cut 事件，将选中内容序列化为 Markdown 写入剪贴板，
+ *        避免富文本目标优先读取 text/html 而丢失 Markdown 语法 */
 function createContentPasteExtension(userId: string) {
   return Extension.create({
     name: "contentPaste",
@@ -55,6 +57,27 @@ function createContentPasteExtension(userId: string) {
         new Plugin({
           key: new PluginKey("contentPaste"),
           props: {
+            handleDOMEvents: {
+              copy: (view, event) => {
+                const { selection } = view.state;
+                if (selection.empty || !event.clipboardData) return false;
+                const slice = selection.content();
+                const markdown = (editor.storage.markdown.serializer as { serialize: (c: unknown) => string }).serialize(slice.content);
+                event.preventDefault();
+                event.clipboardData.setData("text/plain", markdown);
+                return true;
+              },
+              cut: (view, event) => {
+                const { selection } = view.state;
+                if (selection.empty || !event.clipboardData) return false;
+                const slice = selection.content();
+                const markdown = (editor.storage.markdown.serializer as { serialize: (c: unknown) => string }).serialize(slice.content);
+                event.preventDefault();
+                event.clipboardData.setData("text/plain", markdown);
+                view.dispatch(view.state.tr.deleteSelection());
+                return true;
+              },
+            },
             handlePaste: (view, event) => {
               const cd = event.clipboardData;
               if (!cd) return false;
@@ -170,7 +193,9 @@ export default function Editor({ note, userId, folders, onSave, onFlushSave, sav
 
   const editor = useEditor({
     extensions: [
-      StarterKit, Markdown, contentPasteExt, shortcutsExt, ImageExt,
+      StarterKit,
+      Markdown.configure({ transformCopiedText: true }),
+      contentPasteExt, shortcutsExt, ImageExt,
       LinkExt.configure({ openOnClick: false }),
       PlaceholderExt.configure({ placeholder: "开始记录… 支持完整 Markdown 语法" }),
       TaskList, TaskItem.configure({ nested: true }),
