@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { DataAdapter, Folder, Note } from "../types";
+import { generateShareToken } from "./shareToken";
 import { isValidSupabaseAnonKey } from "./supabaseConfig";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -48,6 +49,7 @@ interface NoteRow {
   tags: string[] | null;
   folder_id: string | null;
   deleted_at: string | null;
+  share_token: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +72,7 @@ function rowToNote(r: NoteRow): Note {
     tags: r.tags ?? [],
     folderId: r.folder_id ?? null,
     deletedAt: r.deleted_at ?? null,
+    shareToken: r.share_token ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -97,6 +100,19 @@ async function hasFoldersSchema(): Promise<boolean> {
 
 function foldersNotReadyError(): Error {
   return new Error("文件夹功能需要先执行 supabase/schema.sql 数据库迁移");
+}
+
+/** 检测是否已执行分享迁移（notes.share_token + get_shared_note RPC） */
+let shareSchemaReady: boolean | null = null;
+async function hasShareSchema(): Promise<boolean> {
+  if (shareSchemaReady !== null) return shareSchemaReady;
+  const { error } = await db().from("notes").select("share_token").limit(0);
+  shareSchemaReady = !error;
+  return shareSchemaReady;
+}
+
+function shareNotReadyError(): Error {
+  return new Error("分享功能需要先执行 supabase/schema.sql 数据库迁移");
 }
 
 /** 检测是否已执行回收站迁移（notes.deleted_at） */
@@ -212,6 +228,9 @@ export const supabaseAdapter: DataAdapter = {
     if (patch.deletedAt !== undefined && (await hasTrashSchema())) {
       payload.deleted_at = patch.deletedAt;
     }
+    if (patch.shareToken !== undefined && (await hasShareSchema())) {
+      payload.share_token = patch.shareToken;
+    }
     const { data, error } = await db()
       .from("notes")
       .update(payload)
@@ -224,7 +243,9 @@ export const supabaseAdapter: DataAdapter = {
 
   async deleteNote(id) {
     if (await hasTrashSchema()) {
-      await this.updateNote(id, { deletedAt: new Date().toISOString() });
+      const patch: Partial<Note> = { deletedAt: new Date().toISOString() };
+      if (await hasShareSchema()) patch.shareToken = null;
+      await this.updateNote(id, patch);
       return;
     }
     const { error } = await db().from("notes").delete().eq("id", id);
@@ -328,5 +349,30 @@ export const supabaseAdapter: DataAdapter = {
     if (error) throw new Error(error.message);
     const { data } = db().storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
+  },
+
+  async enableShare(noteId) {
+    if (!(await hasShareSchema())) throw shareNotReadyError();
+    const token = generateShareToken();
+    return this.updateNote(noteId, { shareToken: token });
+  },
+
+  async disableShare(noteId) {
+    if (!(await hasShareSchema())) throw shareNotReadyError();
+    return this.updateNote(noteId, { shareToken: null });
+  },
+
+  async getSharedNote(token) {
+    if (!(await hasShareSchema())) return null;
+    const { data, error } = await db().rpc("get_shared_note", { p_token: token });
+    if (error) throw new Error(error.message);
+    const row = (data as { title: string; content: string; tags: string[] | null; updated_at: string }[] | null)?.[0];
+    if (!row) return null;
+    return {
+      title: row.title,
+      content: row.content ?? "",
+      tags: row.tags ?? [],
+      updatedAt: row.updated_at,
+    };
   },
 };

@@ -112,6 +112,18 @@ export function useNotes(userId: string) {
     setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)));
   }, []);
 
+  const enableShare = useCallback(async (id: string) => {
+    const updated = await db.enableShare(id);
+    setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)));
+    return updated;
+  }, []);
+
+  const disableShare = useCallback(async (id: string) => {
+    const updated = await db.disableShare(id);
+    setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)));
+    return updated;
+  }, []);
+
   return {
     notes,
     trashedNotes,
@@ -127,5 +139,7 @@ export function useNotes(userId: string) {
     renameFolder,
     deleteFolder,
     moveNoteToFolder,
+    enableShare,
+    disableShare,
   };
 }

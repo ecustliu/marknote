@@ -1,4 +1,5 @@
-import type { DataAdapter, Folder, Note, User } from "../types";
+import type { DataAdapter, Folder, Note, SharedNote, User } from "../types";
+import { generateShareToken } from "./shareToken";
 
 // 本地存储适配器：无需任何后端即可跑通「登录 + 笔记 CRUD + 图片」主线。
 // 数据存浏览器 localStorage，图片转 base64 内联。仅用于开发/演示，
@@ -98,7 +99,12 @@ export const localAdapter: DataAdapter = {
     const all = read<Note[]>(NOTES_KEY, []);
     return all
       .filter((n) => n.userId === userId && !n.deletedAt)
-      .map((n) => ({ ...n, folderId: n.folderId ?? null, deletedAt: n.deletedAt ?? null }))
+      .map((n) => ({
+        ...n,
+        folderId: n.folderId ?? null,
+        deletedAt: n.deletedAt ?? null,
+        shareToken: n.shareToken ?? null,
+      }))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
 
@@ -106,7 +112,12 @@ export const localAdapter: DataAdapter = {
     const all = read<Note[]>(NOTES_KEY, []);
     return all
       .filter((n) => n.userId === userId && n.deletedAt)
-      .map((n) => ({ ...n, folderId: n.folderId ?? null, deletedAt: n.deletedAt ?? null }))
+      .map((n) => ({
+        ...n,
+        folderId: n.folderId ?? null,
+        deletedAt: n.deletedAt ?? null,
+        shareToken: n.shareToken ?? null,
+      }))
       .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
   },
 
@@ -121,6 +132,7 @@ export const localAdapter: DataAdapter = {
       tags: partial?.tags ?? [],
       folderId: partial?.folderId ?? null,
       deletedAt: null,
+      shareToken: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -139,6 +151,7 @@ export const localAdapter: DataAdapter = {
       id,
       folderId: patch.folderId !== undefined ? patch.folderId : (all[idx].folderId ?? null),
       deletedAt: patch.deletedAt !== undefined ? patch.deletedAt : (all[idx].deletedAt ?? null),
+      shareToken: patch.shareToken !== undefined ? patch.shareToken : (all[idx].shareToken ?? null),
       updatedAt: new Date().toISOString(),
     };
     all[idx] = updated;
@@ -150,7 +163,12 @@ export const localAdapter: DataAdapter = {
     const all = read<Note[]>(NOTES_KEY, []);
     const idx = all.findIndex((n) => n.id === id);
     if (idx === -1) throw new Error("笔记不存在");
-    all[idx] = { ...all[idx], deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    all[idx] = {
+      ...all[idx],
+      deletedAt: new Date().toISOString(),
+      shareToken: null,
+      updatedAt: new Date().toISOString(),
+    };
     write(NOTES_KEY, all);
   },
 
@@ -238,5 +256,26 @@ export const localAdapter: DataAdapter = {
       reader.onerror = () => reject(new Error("图片读取失败"));
       reader.readAsDataURL(file);
     });
+  },
+
+  async enableShare(noteId) {
+    const token = generateShareToken();
+    return this.updateNote(noteId, { shareToken: token });
+  },
+
+  async disableShare(noteId) {
+    return this.updateNote(noteId, { shareToken: null });
+  },
+
+  async getSharedNote(token) {
+    const all = read<Note[]>(NOTES_KEY, []);
+    const note = all.find((n) => n.shareToken === token && !n.deletedAt);
+    if (!note) return null;
+    return {
+      title: note.title,
+      content: note.content,
+      tags: note.tags,
+      updatedAt: note.updatedAt,
+    } satisfies SharedNote;
   },
 };

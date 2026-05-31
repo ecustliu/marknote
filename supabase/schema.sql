@@ -66,6 +66,12 @@ alter table public.notes add column if not exists folder_id uuid references publ
 -- 回收站：软删除时间戳，null 表示未删除
 alter table public.notes add column if not exists deleted_at timestamptz;
 
+-- 只读分享：非 null 时可通过 share_token 公开访问
+alter table public.notes add column if not exists share_token text;
+
+create unique index if not exists notes_share_token on public.notes (share_token)
+  where share_token is not null;
+
 create index if not exists notes_user_active on public.notes (user_id, updated_at desc)
   where deleted_at is null;
 
@@ -103,6 +109,28 @@ drop trigger if exists notes_updated_at on public.notes;
 create trigger notes_updated_at
   before update on public.notes
   for each row execute function public.set_updated_at();
+
+-- 通过 token 只读获取分享笔记（SECURITY DEFINER，避免枚举所有已分享笔记）
+create or replace function public.get_shared_note(p_token text)
+returns table (
+  title text,
+  content text,
+  tags text[],
+  updated_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select n.title, n.content, n.tags, n.updated_at
+  from public.notes n
+  where n.share_token = p_token
+    and n.deleted_at is null
+  limit 1;
+$$;
+
+grant execute on function public.get_shared_note(text) to anon, authenticated;
 
 -- ── 图片 Storage ────────────────────────────────────────
 -- bucket 设为 public，笔记里可直接用公开 URL 渲染图片

@@ -24,7 +24,17 @@ export interface Note {
   folderId: string | null;
   /** 移入回收站的时间，null 表示未删除 */
   deletedAt: string | null;
+  /** 只读分享 token，null 表示未开启分享 */
+  shareToken: string | null;
   createdAt: string;
+  updatedAt: string;
+}
+
+/** 公开分享页展示的笔记（不含 userId 等敏感字段） */
+export interface SharedNote {
+  title: string;
+  content: string;
+  tags: string[];
   updatedAt: string;
 }
 
@@ -62,4 +72,9 @@ export interface DataAdapter {
 
   // 图片上传，返回可访问 URL
   uploadImage(userId: string, file: File): Promise<string>;
+
+  // 只读分享
+  enableShare(noteId: string): Promise<Note>;
+  disableShare(noteId: string): Promise<Note>;
+  getSharedNote(token: string): Promise<SharedNote | null>;
 }

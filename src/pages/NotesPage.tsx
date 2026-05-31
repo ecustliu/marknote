@@ -24,6 +24,8 @@ export default function NotesPage() {
     renameFolder,
     deleteFolder,
     moveNoteToFolder,
+    enableShare,
+    disableShare,
   } = useNotes(user!.id);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showTrash, setShowTrash] = useState(false);
@@ -149,6 +151,8 @@ export default function NotesPage() {
                 activeNote.deletedAt ? () => void handlePermanentDelete(activeNote.id) : undefined
               }
               onSave={(patch: Partial<Note>) => saveNote(activeNote.id, patch)}
+              onEnableShare={() => enableShare(activeNote.id).then(() => {})}
+              onDisableShare={() => disableShare(activeNote.id).then(() => {})}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-3">

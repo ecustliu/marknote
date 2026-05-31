@@ -3,6 +3,7 @@ import { useAuth } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import SharePage from "./pages/SharePage";
 import NotesPage from "./pages/NotesPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/s/:token" element={<SharePage />} />
       <Route
         path="/*"
         element={
