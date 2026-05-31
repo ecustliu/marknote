@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Copy, Link2, X } from "lucide-react";
+import { Check, Copy, Share2, X } from "lucide-react";
 import { buildShareUrl } from "../lib/shareToken";
 import { isCloud } from "../lib/db";
 
@@ -63,12 +63,13 @@ export default function SharePanel({ shareToken, onEnableShare, onDisableShare }
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`p-1.5 rounded transition-colors ${
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
           shareToken ? "text-blue-600 bg-blue-50 hover:bg-blue-100" : "text-gray-500 hover:bg-gray-100"
         }`}
-        title="分享"
+        title="分享笔记"
       >
-        <Link2 className="w-4 h-4" />
+        <Share2 className="w-3.5 h-3.5" />
+        <span>分享</span>
       </button>
 
       {open && (

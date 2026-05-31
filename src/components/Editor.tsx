@@ -14,7 +14,7 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { Columns2, Eye, FileDown, FolderOpen, Image, PencilLine, RotateCcw, Table2, Tag, Trash2, X } from "lucide-react";
+import { Columns2, Eye, FileOutput, FolderOpen, ImagePlus, PencilLine, RotateCcw, Table2, Tag, Trash2, X } from "lucide-react";
 import { db } from "../lib/db";
 import { exportNoteToPdf } from "../lib/exportPdf";
 import { extractHeadings, type TocItem } from "../lib/headings";
@@ -319,8 +319,13 @@ export default function Editor({ note, userId, folders, onSave, readOnly = false
         {!readOnly && viewMode !== "preview" && (
           <>
             <div className="w-px h-4 bg-gray-200 mx-1" />
-            <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" title="插入图片">
-              <Image className="w-4 h-4" />
+            <button
+              onMouseDown={(e) => { e.preventDefault(); insertImage(); }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:bg-gray-100"
+              title="插入图片"
+            >
+              <ImagePlus className="w-3.5 h-3.5" />
+              <span>图片</span>
             </button>
             <TableMenu editor={editor} />
           </>
@@ -330,10 +335,11 @@ export default function Editor({ note, userId, folders, onSave, readOnly = false
         <button
           onClick={() => void handleExportPdf()}
           disabled={exporting}
-          className="p-1.5 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-40"
-          title="导出 PDF"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-40"
+          title="导出为 PDF 文件"
         >
-          <FileDown className="w-4 h-4" />
+          <FileOutput className="w-3.5 h-3.5" />
+          <span>导出 PDF</span>
         </button>
 
         {/* 分享 */}
@@ -421,10 +427,13 @@ function TableMenu({ editor }: { editor: ReturnType<typeof useEditor> }) {
     <div className="relative">
       <button
         onMouseDown={(e) => { e.preventDefault(); setOpen((v) => !v); }}
-        className={`p-1.5 rounded text-gray-500 hover:bg-gray-100 ${inTable ? "bg-blue-100 text-blue-700" : ""}`}
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+          inTable ? "bg-blue-100 text-blue-700" : "text-gray-500 hover:bg-gray-100"
+        }`}
         title="表格"
       >
-        <Table2 className="w-4 h-4" />
+        <Table2 className="w-3.5 h-3.5" />
+        <span>表格</span>
       </button>
       {open && (
         <>
