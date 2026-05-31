@@ -84,18 +84,51 @@ if (!res.ok) {
 
 console.log("✓ notes 表可访问");
 
+const shareRpcRes = await fetch(`${url}/rest/v1/rpc/get_shared_note`, {
+  method: "POST",
+  headers: {
+    apikey: anonKey,
+    Authorization: `Bearer ${anonKey}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ p_token: "__check__" }),
+});
+
+if (shareRpcRes.status === 404) {
+  console.log("✗ get_shared_note 函数未创建");
+  console.log("  请在 Supabase SQL Editor 执行 supabase/share.sql");
+  process.exit(1);
+}
+
+if (!shareRpcRes.ok && shareRpcRes.status !== 200) {
+  const body = await shareRpcRes.text();
+  console.log(`✗ get_shared_note 调用失败 (${shareRpcRes.status}): ${body.slice(0, 200)}`);
+  process.exit(1);
+}
+
+console.log("✓ get_shared_note 分享 RPC 已就绪");
+
 const bucketRes = await fetch(`${url}/storage/v1/bucket/${bucket}`, {
   headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
 });
+
+let allOk = true;
 
 if (bucketRes.ok) {
   const info = await bucketRes.json();
   console.log(`✓ Storage bucket「${bucket}」已创建 (public: ${info.public})`);
 } else {
-  console.log(`✗ Storage bucket「${bucket}」未找到`);
-  console.log("  请重新执行 supabase/schema.sql 中的 Storage 部分");
-  process.exit(1);
+  allOk = false;
+  console.log(`✗ Storage bucket「${bucket}」未找到（图片上传不可用）`);
+  console.log("  请在 Supabase SQL Editor 执行 supabase/storage.sql");
+  console.log("  或在 Dashboard → Storage → New bucket，名称 note-images，勾选 Public");
 }
 
-console.log("\n全部就绪！重启 dev server 后将以云端模式运行:");
-console.log("  npm run dev\n");
+if (allOk) {
+  console.log("\n全部就绪！重启 dev server 后将以云端模式运行:");
+  console.log("  npm run dev\n");
+} else {
+  console.log("\n分享功能已就绪，但图片 Storage 尚未配置。");
+  console.log("若只需测试分享链接，可忽略 Storage 警告；上传图片前请完成上述配置。\n");
+  process.exit(1);
+}

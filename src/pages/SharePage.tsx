@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { BookOpen, Tag } from "lucide-react";
 import MarkdownPreview from "../components/MarkdownPreview";
 import { db } from "../lib/db";
+import { ShareNotConfiguredError } from "../lib/shareErrors";
 import type { SharedNote } from "../types";
 
 export default function SharePage() {
@@ -10,6 +11,7 @@ export default function SharePage() {
   const [note, setNote] = useState<SharedNote | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [notConfigured, setNotConfigured] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -21,6 +23,7 @@ export default function SharePage() {
     let active = true;
     setLoading(true);
     setNotFound(false);
+    setNotConfigured(false);
 
     db.getSharedNote(token)
       .then((result) => {
@@ -28,7 +31,11 @@ export default function SharePage() {
         if (result) setNote(result);
         else setNotFound(true);
       })
-      .catch(() => active && setNotFound(true))
+      .catch((err) => {
+        if (!active) return;
+        if (err instanceof ShareNotConfiguredError) setNotConfigured(true);
+        else setNotFound(true);
+      })
       .finally(() => active && setLoading(false));
 
     return () => { active = false; };
@@ -38,6 +45,18 @@ export default function SharePage() {
     return (
       <div className="flex items-center justify-center min-h-full text-gray-400 text-sm">
         加载中…
+      </div>
+    );
+  }
+
+  if (notConfigured) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-full text-gray-400 gap-3 px-4 max-w-md mx-auto text-center">
+        <BookOpen className="w-12 h-12" />
+        <p className="text-sm text-gray-600">分享功能尚未完成数据库配置</p>
+        <p className="text-xs text-gray-400">
+          请在 Supabase SQL Editor 执行 <code className="bg-gray-100 px-1 rounded">supabase/share.sql</code>，然后重新生成分享链接。
+        </p>
       </div>
     );
   }

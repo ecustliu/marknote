@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { DataAdapter, Folder, Note } from "../types";
 import { generateShareToken } from "./shareToken";
+import { ShareNotConfiguredError } from "./shareErrors";
 import { isValidSupabaseAnonKey } from "./supabaseConfig";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -365,7 +366,12 @@ export const supabaseAdapter: DataAdapter = {
   async getSharedNote(token) {
     if (!(await hasShareSchema())) return null;
     const { data, error } = await db().rpc("get_shared_note", { p_token: token });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.code === "PGRST202" || error.message.includes("get_shared_note")) {
+        throw new ShareNotConfiguredError();
+      }
+      throw new Error(error.message);
+    }
     const row = (data as { title: string; content: string; tags: string[] | null; updated_at: string }[] | null)?.[0];
     if (!row) return null;
     return {
