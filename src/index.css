@@ -92,3 +92,5 @@ body {
 .preview-note hr { border: none; border-top: 1px solid #e5e7eb; margin: 1rem 0; }
 .preview-note .mermaid { margin: 1rem 0; text-align: center; overflow-x: auto; }
 .preview-note .mermaid svg { max-width: 100%; height: auto; }
+.preview-note .katex-display { margin: 1rem 0; overflow-x: auto; overflow-y: hidden; }
+.preview-note .katex { font-size: 1.05em; }

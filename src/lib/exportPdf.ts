@@ -39,6 +39,8 @@ const PDF_STYLES = `
   .pdf-root .pdf-export hr { border: none; border-top: 1px solid #e5e7eb; margin: 1rem 0; }
   .pdf-root .mermaid { margin: 1rem 0; text-align: center; overflow-x: auto; }
   .pdf-root .mermaid svg { max-width: 100%; height: auto; }
+  .pdf-root .katex-display { margin: 1rem 0; overflow-x: auto; text-align: center; }
+  .pdf-root .katex { font-size: 1.05em; }
 `;
 
 function escapeHtml(text: string): string {

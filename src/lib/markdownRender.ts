@@ -6,6 +6,7 @@ import {
   preprocessMarkdownForMermaid,
   toMermaidSource,
 } from "./mermaidDetect";
+import { applyMathToHtml, preprocessMath } from "./mathRender";
 
 function escapeHtml(text: string): string {
   return text
@@ -17,8 +18,9 @@ function escapeHtml(text: string): string {
 
 /** 将 Markdown 转为带 heading id 的 HTML（预览 / PDF 导出共用） */
 export function renderMarkdownToHtml(md: string): string {
-  const normalized = preprocessMarkdownForMermaid(md);
-  const headings = extractHeadings(normalized);
+  const withMermaid = preprocessMarkdownForMermaid(md);
+  const { markdown, math } = preprocessMath(withMermaid);
+  const headings = extractHeadings(withMermaid);
   let hi = 0;
   const renderer = new Renderer();
   const defaultCode = renderer.code.bind(renderer);
@@ -38,6 +40,7 @@ export function renderMarkdownToHtml(md: string): string {
     return defaultCode(token);
   };
 
-  const html = marked.parse(normalized, { renderer }) as string;
-  return convertPreBlocksToMermaidDivs(html);
+  const html = marked.parse(markdown, { renderer }) as string;
+  const withMath = applyMathToHtml(html, math);
+  return convertPreBlocksToMermaidDivs(withMath);
 }
