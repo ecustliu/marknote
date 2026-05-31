@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Camera,
   ChevronDown,
   ChevronRight,
   FilePlus,
@@ -15,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Folder as FolderType, Note, User } from "../types";
+import { useAuth } from "../context/AuthContext";
 import ChangePasswordDialog from "./ChangePasswordDialog";
 
 const NOTE_DRAG_MIME = "application/x-marknote-note-id";
@@ -50,6 +52,68 @@ function userInitials(email: string): string {
 function userDisplayName(email: string): string {
   const local = email.split("@")[0] ?? email;
   return local.replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function UserAvatar({ user }: { user: User }) {
+  const { uploadAvatar } = useAuth();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      await uploadAvatar(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "上传失败");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        className="group relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-sm disabled:cursor-wait"
+        title="更换头像"
+      >
+        {user.avatarUrl ? (
+          <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center bg-blue-600 text-sm font-semibold text-white">
+            {userInitials(user.email)}
+          </span>
+        )}
+        <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-disabled:opacity-60">
+          <Camera className="h-4 w-4 text-white" />
+        </span>
+        {uploading && (
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          </span>
+        )}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        className="hidden"
+        onChange={handleFile}
+      />
+      {error && (
+        <p className="absolute left-0 top-full z-10 mt-1 w-40 rounded-lg bg-red-50 px-2 py-1 text-xs text-red-500 shadow-sm">
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function highlight(text: string, kw: string) {
@@ -534,9 +598,7 @@ export default function Sidebar({
       </div>
 
       <div className="mx-3 mt-3 mb-1 flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/40 px-3 py-2.5">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white shadow-sm">
-          {userInitials(user.email)}
-        </div>
+        <UserAvatar user={user} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-gray-800">{userDisplayName(user.email)}</p>
           <p className="truncate text-xs text-gray-400">{user.email}</p>

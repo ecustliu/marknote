@@ -1,4 +1,5 @@
 import type { DataAdapter, Folder, Note, SharedNote, User } from "../types";
+import { validateAvatarFile } from "./avatar";
 import { generateShareToken } from "./shareToken";
 
 // 本地存储适配器：无需任何后端即可跑通「登录 + 笔记 CRUD + 图片」主线。
@@ -29,6 +30,10 @@ function uid(prefix = ""): string {
 
 type StoredUser = User & { password: string };
 
+function toUser(stored: Pick<StoredUser, "id" | "email" | "avatarUrl">): User {
+  return { id: stored.id, email: stored.email, avatarUrl: stored.avatarUrl ?? null };
+}
+
 const authListeners = new Set<(u: User | null) => void>();
 function emitAuth(user: User | null) {
   authListeners.forEach((cb) => cb(user));
@@ -46,7 +51,7 @@ export const localAdapter: DataAdapter = {
     const found = users.find((u) => u.email === email);
     if (!found) throw new Error("账号不存在，请先注册");
     if (found.password !== password) throw new Error("密码错误");
-    const user: User = { id: found.id, email: found.email };
+    const user = toUser(found);
     write(SESSION_KEY, user);
     emitAuth(user);
     return user;
@@ -55,10 +60,10 @@ export const localAdapter: DataAdapter = {
   async signUp(email, password) {
     const users = read<StoredUser[]>(USERS_KEY, []);
     if (users.some((u) => u.email === email)) throw new Error("该邮箱已注册");
-    const stored: StoredUser = { id: uid("u_"), email, password };
+    const stored: StoredUser = { id: uid("u_"), email, password, avatarUrl: null };
     users.push(stored);
     write(USERS_KEY, users);
-    const user: User = { id: stored.id, email: stored.email };
+    const user = toUser(stored);
     write(SESSION_KEY, user);
     emitAuth(user);
     return user;
@@ -256,6 +261,20 @@ export const localAdapter: DataAdapter = {
       reader.onerror = () => reject(new Error("图片读取失败"));
       reader.readAsDataURL(file);
     });
+  },
+
+  async uploadAvatar(userId, file) {
+    validateAvatarFile(file);
+    const avatarUrl = await this.uploadImage(userId, file);
+    const users = read<StoredUser[]>(USERS_KEY, []);
+    const idx = users.findIndex((u) => u.id === userId);
+    if (idx === -1) throw new Error("用户不存在");
+    users[idx] = { ...users[idx], avatarUrl };
+    write(USERS_KEY, users);
+    const user = toUser(users[idx]);
+    write(SESSION_KEY, user);
+    emitAuth(user);
+    return user;
   },
 
   async enableShare(noteId) {

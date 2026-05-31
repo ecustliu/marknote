@@ -1,6 +1,8 @@
 export interface User {
   id: string;
   email: string;
+  /** 头像 URL，未设置时为 null */
+  avatarUrl?: string | null;
 }
 
 export interface Folder {
@@ -51,6 +53,8 @@ export interface DataAdapter {
   requestPasswordReset(email: string): Promise<void>;
   /** 修改密码；已登录修改需传 currentPassword，邮件重置链接进入时不传 */
   updatePassword(newPassword: string, currentPassword?: string): Promise<void>;
+  /** 上传并更新用户头像，返回更新后的用户信息 */
+  uploadAvatar(userId: string, file: File): Promise<User>;
   onAuthChange(cb: (user: User | null) => void): () => void;
 
   // 笔记 CRUD

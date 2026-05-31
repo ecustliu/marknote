@@ -17,6 +17,7 @@ interface AuthState {
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (newPassword: string, currentPassword?: string) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -50,6 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestPasswordReset: (email) => db.requestPasswordReset(email),
       updatePassword: (newPassword, currentPassword) =>
         db.updatePassword(newPassword, currentPassword),
+      uploadAvatar: async (file) => {
+        if (!user) throw new Error("请先登录");
+        setUser(await db.uploadAvatar(user.id, file));
+      },
     }),
     [user, loading]
   );

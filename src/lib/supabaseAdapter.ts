@@ -1,5 +1,6 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { DataAdapter, Folder, Note } from "../types";
+import { createClient, type SupabaseClient, type User as SupabaseUser } from "@supabase/supabase-js";
+import type { DataAdapter, Folder, Note, User } from "../types";
+import { validateAvatarFile } from "./avatar";
 import { generateShareToken } from "./shareToken";
 import { ShareNotConfiguredError } from "./shareErrors";
 import { isValidSupabaseAnonKey } from "./supabaseConfig";
@@ -39,6 +40,11 @@ export class RegistrationPendingError extends Error {
     super(message);
     this.name = "RegistrationPending";
   }
+}
+
+function authUserToUser(u: SupabaseUser): User {
+  const avatarUrl = (u.user_metadata?.avatar_url as string | undefined) ?? null;
+  return { id: u.id, email: u.email ?? "", avatarUrl };
 }
 
 // 数据库行 -> 应用模型
@@ -130,22 +136,20 @@ export const supabaseAdapter: DataAdapter = {
 
   async getCurrentUser() {
     const { data } = await db().auth.getSession();
-    return data.session?.user
-      ? { id: data.session.user.id, email: data.session.user.email ?? "" }
-      : null;
+    return data.session?.user ? authUserToUser(data.session.user) : null;
   },
 
   async signIn(email, password) {
     const { data, error } = await db().auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
-    return { id: data.user!.id, email: data.user!.email ?? "" };
+    return authUserToUser(data.user!);
   },
 
   async signUp(email, password) {
     const { data, error } = await db().auth.signUp({ email, password });
     if (error) throw new Error(error.message);
     if (!data.session) throw new RegistrationPendingError();
-    return { id: data.user!.id, email: data.user!.email ?? "" };
+    return authUserToUser(data.user!);
   },
 
   async signOut() {
@@ -178,7 +182,7 @@ export const supabaseAdapter: DataAdapter = {
 
   onAuthChange(cb) {
     const { data } = db().auth.onAuthStateChange((_event, session) => {
-      cb(session?.user ? { id: session.user.id, email: session.user.email ?? "" } : null);
+      cb(session?.user ? authUserToUser(session.user) : null);
     });
     return () => data.subscription.unsubscribe();
   },
@@ -350,6 +354,24 @@ export const supabaseAdapter: DataAdapter = {
     if (error) throw new Error(error.message);
     const { data } = db().storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
+  },
+
+  async uploadAvatar(userId, file) {
+    validateAvatarFile(file);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+    const path = `${userId}/avatar.${ext}`;
+    const { error: uploadError } = await db().storage.from(bucket).upload(path, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data: urlData } = db().storage.from(bucket).getPublicUrl(path);
+    const avatarUrl = `${urlData.publicUrl}?v=${Date.now()}`;
+
+    const { data, error } = await db().auth.updateUser({ data: { avatar_url: avatarUrl } });
+    if (error) throw new Error(error.message);
+    return authUserToUser(data.user!);
   },
 
   async enableShare(noteId) {
