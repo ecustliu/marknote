@@ -1,4 +1,5 @@
 import { renderMarkdownToHtml } from "./markdownRender";
+import { renderMermaidIn } from "./mermaidRender";
 
 interface ExportNotePdfOptions {
   title: string;
@@ -36,6 +37,8 @@ const PDF_STYLES = `
   .pdf-root .pdf-export th, .pdf-root .pdf-export td { border: 1px solid #e5e7eb; padding: .4rem .7rem; text-align: left; }
   .pdf-root .pdf-export th { background: #f8fafc; font-weight: 600; }
   .pdf-root .pdf-export hr { border: none; border-top: 1px solid #e5e7eb; margin: 1rem 0; }
+  .pdf-root .mermaid { margin: 1rem 0; text-align: center; overflow-x: auto; }
+  .pdf-root .mermaid svg { max-width: 100%; height: auto; }
 `;
 
 function escapeHtml(text: string): string {
@@ -166,6 +169,7 @@ export async function exportNoteToPdf({ title, content, tags = [] }: ExportNoteP
 
   try {
     await waitForImages(element);
+    await renderMermaidIn(element);
     await waitForFrames(4);
 
     const finalH = Math.max(element.scrollHeight, element.offsetHeight, 400);

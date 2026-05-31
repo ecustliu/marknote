@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor as TiptapEditor } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -19,6 +19,7 @@ import { db } from "../lib/db";
 import { exportNoteToPdf } from "../lib/exportPdf";
 import { extractHeadings, type TocItem } from "../lib/headings";
 import { renderMarkdownToHtml } from "../lib/markdownRender";
+import { renderMermaidIn } from "../lib/mermaidRender";
 import TocPanel from "./TocPanel";
 import type { Folder, Note } from "../types";
 
@@ -126,6 +127,7 @@ export default function Editor({ note, userId, folders, onSave }: Props) {
   const [tags, setTags] = useState<string[]>(note.tags);
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
   const [exporting, setExporting] = useState(false);
+  const [previewMd, setPreviewMd] = useState(note.content);
 
   useEffect(() => { setTitle(note.title); setTags(note.tags); }, [note.id, note.title, note.tags]);
 
@@ -144,12 +146,16 @@ export default function Editor({ note, userId, folders, onSave }: Props) {
     editorProps: { attributes: { class: "prose-note min-h-[60vh] px-1 py-2" } },
     onUpdate({ editor }) {
       const md = editor.storage.markdown.getMarkdown() as string;
+      setPreviewMd(md);
       onSave({ content: md, title, tags });
     },
   });
 
   useEffect(() => {
-    if (editor && !editor.isDestroyed) editor.commands.setContent(note.content ?? "");
+    if (editor && !editor.isDestroyed) {
+      editor.commands.setContent(note.content ?? "");
+      setPreviewMd(editor.storage.markdown.getMarkdown() as string);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id]);
 
@@ -187,7 +193,7 @@ export default function Editor({ note, userId, folders, onSave }: Props) {
   }, [editor, userId]);
 
   const previewRef = useRef<HTMLDivElement>(null);
-  const md = editor?.storage.markdown.getMarkdown() as string ?? note.content;
+  const md = previewMd;
   const headings = useMemo(() => extractHeadings(md), [md]);
 
   const scrollToHeading = useCallback((item: TocItem) => {
@@ -405,8 +411,23 @@ function scrollToHeadingInEditor(editor: TiptapEditor, index: number) {
 
 function MarkdownPreview({ md, className = "" }: { md: string; className?: string }) {
   const html = useMemo(() => renderMarkdownToHtml(md), [md]);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    let cancelled = false;
+    const run = async () => {
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      if (!cancelled) await renderMermaidIn(root);
+    };
+    void run();
+    return () => { cancelled = true; };
+  }, [html]);
+
   return (
     <div
+      ref={ref}
       className={`preview-note overflow-y-auto px-8 py-4 bg-gray-50/50 ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
