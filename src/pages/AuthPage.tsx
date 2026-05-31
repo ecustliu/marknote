@@ -3,21 +3,30 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { isCloud } from "../lib/db";
 import { formatAuthError } from "../lib/authErrors";
+import { clearSavedLogin, loadSavedLogin, saveSavedLogin } from "../lib/savedLogin";
 import { BookOpen } from "lucide-react";
+
+const saved = loadSavedLogin();
 
 export default function AuthPage() {
   const { signIn, signUp, user } = useAuth();
   const location = useLocation();
   const resetSuccess = (location.state as { passwordReset?: boolean } | null)?.passwordReset;
 
-  if (user) return <Navigate to="/" replace />;
-
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(saved?.email ?? "");
+  const [password, setPassword] = useState(saved?.password ?? "");
+  const [remember, setRemember] = useState(saved !== null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState(resetSuccess ? "密码已重置，请使用新密码登录" : "");
   const [loading, setLoading] = useState(false);
+
+  if (user) return <Navigate to="/" replace />;
+
+  function persistLoginIfNeeded() {
+    if (remember) saveSavedLogin({ email, password });
+    else clearSavedLogin();
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,8 +34,13 @@ export default function AuthPage() {
     setInfo("");
     setLoading(true);
     try {
-      if (mode === "login") await signIn(email, password);
-      else await signUp(email, password);
+      if (mode === "login") {
+        await signIn(email, password);
+        persistLoginIfNeeded();
+      } else {
+        await signUp(email, password);
+        if (remember) saveSavedLogin({ email, password });
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "RegistrationPending") {
         setInfo(err.message);
@@ -66,6 +80,7 @@ export default function AuthPage() {
               <input
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -87,6 +102,7 @@ export default function AuthPage() {
               <input
                 type="password"
                 required
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="至少 6 位"
@@ -94,6 +110,22 @@ export default function AuthPage() {
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
               />
             </div>
+
+            {mode === "login" && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setRemember(checked);
+                    if (!checked) clearSavedLogin();
+                  }}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-400"
+                />
+                <span className="text-sm text-gray-600">记住登录信息</span>
+              </label>
+            )}
 
             {error && (
               <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
