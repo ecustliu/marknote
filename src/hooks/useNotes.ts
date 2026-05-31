@@ -2,12 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { db } from "../lib/db";
 import type { Folder, Note } from "../types";
 
+export type SaveState = "idle" | "pending" | "saving" | "saved" | "error";
+
 export function useNotes(userId: string) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [trashedNotes, setTrashedNotes] = useState<Note[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatches = useRef<Map<string, Partial<Note>>>(new Map());
 
   useEffect(() => {
     let active = true;
@@ -26,6 +31,25 @@ export function useNotes(userId: string) {
     return () => { active = false; };
   }, [userId]);
 
+  const persistNote = useCallback(async (id: string) => {
+    const patch = pendingPatches.current.get(id);
+    if (!patch || Object.keys(patch).length === 0) return;
+
+    pendingPatches.current.delete(id);
+    setSaveState("saving");
+    try {
+      const updated = await db.updateNote(id, patch);
+      setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)));
+      setSaveState("saved");
+      if (savedFadeTimer.current) clearTimeout(savedFadeTimer.current);
+      savedFadeTimer.current = setTimeout(() => setSaveState("idle"), 2000);
+    } catch (err) {
+      console.error("保存笔记失败:", err);
+      pendingPatches.current.set(id, { ...patch, ...pendingPatches.current.get(id) });
+      setSaveState("error");
+    }
+  }, []);
+
   const createNote = useCallback(async (folderId?: string | null) => {
     const note = await db.createNote(userId, { folderId: folderId ?? null });
     setNotes((prev) => [note, ...prev]);
@@ -38,6 +62,7 @@ export function useNotes(userId: string) {
       removed = prev.find((n) => n.id === id);
       return prev.filter((n) => n.id !== id);
     });
+    pendingPatches.current.delete(id);
     await db.deleteNote(id);
     if (removed) {
       setTrashedNotes((prev) => [
@@ -68,13 +93,22 @@ export function useNotes(userId: string) {
     setNotes((prev) =>
       prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: new Date().toISOString() } : n))
     );
+    pendingPatches.current.set(id, { ...pendingPatches.current.get(id), ...patch });
+    setSaveState("pending");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      db.updateNote(id, patch).then((updated) => {
-        setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)));
-      });
-    }, 800);
-  }, []);
+    saveTimer.current = setTimeout(() => void persistNote(id), 800);
+  }, [persistNote]);
+
+  const flushSave = useCallback(async (id: string, patch?: Partial<Note>) => {
+    if (patch) {
+      setNotes((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: new Date().toISOString() } : n))
+      );
+      pendingPatches.current.set(id, { ...pendingPatches.current.get(id), ...patch });
+    }
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    await persistNote(id);
+  }, [persistNote]);
 
   const createFolder = useCallback(async (parentId?: string | null) => {
     const folder = await db.createFolder(userId, { parentId: parentId ?? null });
@@ -129,12 +163,14 @@ export function useNotes(userId: string) {
     trashedNotes,
     folders,
     loading,
+    saveState,
     createNote,
     deleteNote,
     restoreNote,
     permanentlyDeleteNote,
     emptyTrash,
     saveNote,
+    flushSave,
     createFolder,
     renameFolder,
     deleteFolder,

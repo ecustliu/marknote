@@ -7,6 +7,7 @@ import {
   toMermaidSource,
 } from "./mermaidDetect";
 import { applyMathToHtml, preprocessMath } from "./mathRender";
+import { highlightCode } from "./codeHighlight";
 
 function escapeHtml(text: string): string {
   return text
@@ -23,7 +24,6 @@ export function renderMarkdownToHtml(md: string): string {
   const headings = extractHeadings(withMermaid);
   let hi = 0;
   const renderer = new Renderer();
-  const defaultCode = renderer.code.bind(renderer);
 
   renderer.heading = function ({ tokens, depth }) {
     const text = this.parser.parseInline(tokens);
@@ -37,7 +37,9 @@ export function renderMarkdownToHtml(md: string): string {
       const src = toMermaidSource(token.text, token.lang);
       return `<div class="mermaid">${escapeHtml(src)}</div>\n`;
     }
-    return defaultCode(token);
+    const { html, language } = highlightCode(token.text, token.lang);
+    const langClass = language ? ` language-${language}` : "";
+    return `<pre class="hljs-block"><code class="hljs${langClass}">${html}</code></pre>\n`;
   };
 
   const html = marked.parse(markdown, { renderer }) as string;

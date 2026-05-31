@@ -20,6 +20,8 @@ export default function NotesPage() {
     permanentlyDeleteNote,
     emptyTrash,
     saveNote,
+    flushSave,
+    saveState,
     createFolder,
     renameFolder,
     deleteFolder,
@@ -151,6 +153,8 @@ export default function NotesPage() {
                 activeNote.deletedAt ? () => void handlePermanentDelete(activeNote.id) : undefined
               }
               onSave={(patch: Partial<Note>) => saveNote(activeNote.id, patch)}
+              onFlushSave={(patch) => flushSave(activeNote.id, patch)}
+              saveState={saveState}
               onEnableShare={() => enableShare(activeNote.id).then(() => {})}
               onDisableShare={() => disableShare(activeNote.id).then(() => {})}
             />

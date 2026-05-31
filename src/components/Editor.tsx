@@ -17,11 +17,13 @@ import TableHeader from "@tiptap/extension-table-header";
 import { Columns2, Eye, FileOutput, FolderOpen, ImagePlus, PencilLine, RotateCcw, Table2, Tag, Trash2, X } from "lucide-react";
 import { db } from "../lib/db";
 import { exportNoteToPdf } from "../lib/exportPdf";
+import { createEditorShortcuts } from "../lib/editorShortcuts";
 import { extractHeadings, type TocItem } from "../lib/headings";
 import TocPanel from "./TocPanel";
 import MarkdownPreview from "./MarkdownPreview";
 import SharePanel from "./SharePanel";
 import type { Folder, Note } from "../types";
+import type { SaveState } from "../hooks/useNotes";
 
 type ViewMode = "edit" | "split" | "preview";
 
@@ -92,6 +94,8 @@ interface Props {
   userId: string;
   folders: Folder[];
   onSave: (patch: Partial<Note>) => void;
+  onFlushSave?: (patch: Partial<Note>) => Promise<void>;
+  saveState?: SaveState;
   readOnly?: boolean;
   onRestore?: () => void;
   onPermanentDelete?: () => void;
@@ -111,22 +115,32 @@ function folderSelectOptions(folders: Folder[], parentId: string | null = null, 
 const TOOLBAR = (editor: ReturnType<typeof useEditor>) =>
   editor
     ? [
-        { label: "B",   cls: "font-bold",            active: editor.isActive("bold"),              cmd: () => editor.chain().focus().toggleBold().run() },
-        { label: "I",   cls: "italic",               active: editor.isActive("italic"),            cmd: () => editor.chain().focus().toggleItalic().run() },
-        { label: "S",   cls: "line-through text-xs", active: editor.isActive("strike"),            cmd: () => editor.chain().focus().toggleStrike().run() },
-        { label: "`",   cls: "font-mono text-xs",    active: editor.isActive("code"),              cmd: () => editor.chain().focus().toggleCode().run() },
-        { label: "H1",  cls: "text-xs",              active: editor.isActive("heading",{level:1}), cmd: () => editor.chain().focus().toggleHeading({level:1}).run() },
-        { label: "H2",  cls: "text-xs",              active: editor.isActive("heading",{level:2}), cmd: () => editor.chain().focus().toggleHeading({level:2}).run() },
-        { label: "H3",  cls: "text-xs",              active: editor.isActive("heading",{level:3}), cmd: () => editor.chain().focus().toggleHeading({level:3}).run() },
-        { label: "UL",  cls: "text-xs",              active: editor.isActive("bulletList"),        cmd: () => editor.chain().focus().toggleBulletList().run() },
-        { label: "OL",  cls: "text-xs",              active: editor.isActive("orderedList"),       cmd: () => editor.chain().focus().toggleOrderedList().run() },
-        { label: "☑",   cls: "text-xs",              active: editor.isActive("taskList"),          cmd: () => editor.chain().focus().toggleTaskList().run() },
-        { label: '❝',   cls: "text-xs",              active: editor.isActive("blockquote"),        cmd: () => editor.chain().focus().toggleBlockquote().run() },
-        { label: "</>", cls: "font-mono text-xs",    active: editor.isActive("codeBlock"),         cmd: () => editor.chain().focus().toggleCodeBlock().run() },
+        { label: "B",   cls: "font-bold",            title: "粗体 ⌘B",              active: editor.isActive("bold"),              cmd: () => editor.chain().focus().toggleBold().run() },
+        { label: "I",   cls: "italic",               title: "斜体 ⌘I",              active: editor.isActive("italic"),            cmd: () => editor.chain().focus().toggleItalic().run() },
+        { label: "S",   cls: "line-through text-xs", title: "删除线",               active: editor.isActive("strike"),            cmd: () => editor.chain().focus().toggleStrike().run() },
+        { label: "`",   cls: "font-mono text-xs",    title: "行内代码 ⌘E",          active: editor.isActive("code"),              cmd: () => editor.chain().focus().toggleCode().run() },
+        { label: "H1",  cls: "text-xs",              title: "标题 1 ⌘⌥1",           active: editor.isActive("heading",{level:1}), cmd: () => editor.chain().focus().toggleHeading({level:1}).run() },
+        { label: "H2",  cls: "text-xs",              title: "标题 2 ⌘⌥2",           active: editor.isActive("heading",{level:2}), cmd: () => editor.chain().focus().toggleHeading({level:2}).run() },
+        { label: "H3",  cls: "text-xs",              title: "标题 3 ⌘⌥3",           active: editor.isActive("heading",{level:3}), cmd: () => editor.chain().focus().toggleHeading({level:3}).run() },
+        { label: "UL",  cls: "text-xs",              title: "无序列表 ⌘⇧8",         active: editor.isActive("bulletList"),        cmd: () => editor.chain().focus().toggleBulletList().run() },
+        { label: "OL",  cls: "text-xs",              title: "有序列表 ⌘⇧7",         active: editor.isActive("orderedList"),       cmd: () => editor.chain().focus().toggleOrderedList().run() },
+        { label: "☑",   cls: "text-xs",              title: "任务列表",             active: editor.isActive("taskList"),          cmd: () => editor.chain().focus().toggleTaskList().run() },
+        { label: '❝',   cls: "text-xs",              title: "引用 ⌘⇧9",             active: editor.isActive("blockquote"),        cmd: () => editor.chain().focus().toggleBlockquote().run() },
+        { label: "</>", cls: "font-mono text-xs",    title: "代码块 ⌘⌥C",           active: editor.isActive("codeBlock"),         cmd: () => editor.chain().focus().toggleCodeBlock().run() },
       ]
     : [];
 
-export default function Editor({ note, userId, folders, onSave, readOnly = false, onRestore, onPermanentDelete, onEnableShare, onDisableShare }: Props) {
+function saveStateLabel(state: SaveState | undefined): string {
+  switch (state) {
+    case "pending": return "编辑中…";
+    case "saving": return "保存中…";
+    case "saved": return "已保存";
+    case "error": return "保存失败";
+    default: return "";
+  }
+}
+
+export default function Editor({ note, userId, folders, onSave, onFlushSave, saveState, readOnly = false, onRestore, onPermanentDelete, onEnableShare, onDisableShare }: Props) {
   const [title, setTitle] = useState(note.title);
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>(note.tags);
@@ -137,10 +151,15 @@ export default function Editor({ note, userId, folders, onSave, readOnly = false
   useEffect(() => { setTitle(note.title); setTags(note.tags); }, [note.id, note.title, note.tags]);
 
   const contentPasteExt = useMemo(() => createContentPasteExtension(userId), [userId]);
+  const flushRef = useRef<() => void>(() => {});
+  const shortcutsExt = useMemo(
+    () => createEditorShortcuts(() => flushRef.current()),
+    []
+  );
 
   const editor = useEditor({
     extensions: [
-      StarterKit, Markdown, contentPasteExt, ImageExt,
+      StarterKit, Markdown, contentPasteExt, shortcutsExt, ImageExt,
       LinkExt.configure({ openOnClick: false }),
       PlaceholderExt.configure({ placeholder: "开始记录… 支持完整 Markdown 语法" }),
       TaskList, TaskItem.configure({ nested: true }),
@@ -172,6 +191,16 @@ export default function Editor({ note, userId, folders, onSave, readOnly = false
   useEffect(() => {
     if (readOnly) setViewMode("preview");
   }, [readOnly, note.id]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    flushRef.current = () => {
+      if (readOnly || !onFlushSave) return;
+      const content = editor.storage.markdown.getMarkdown() as string;
+      setPreviewMd(content);
+      void onFlushSave({ content, title, tags });
+    };
+  }, [editor, readOnly, onFlushSave, title, tags]);
 
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
@@ -309,9 +338,10 @@ export default function Editor({ note, userId, folders, onSave, readOnly = false
 
       {/* 工具栏 */}
       <div className="flex items-center gap-0.5 px-6 py-1.5 border-b border-gray-100 flex-wrap">
-        {!readOnly && viewMode !== "preview" && TOOLBAR(editor).map(({ label, cmd, active, cls }) => (
+        {!readOnly && viewMode !== "preview" && TOOLBAR(editor).map(({ label, cmd, active, cls, title: tip }) => (
           <button
             key={label}
+            title={tip}
             onMouseDown={(e) => { e.preventDefault(); cmd(); }}
             className={`px-2 py-1 rounded text-sm transition-colors ${cls} ${active ? "bg-blue-100 text-blue-700" : "text-gray-500 hover:bg-gray-100"}`}
           >{label}</button>
@@ -392,9 +422,25 @@ export default function Editor({ note, userId, folders, onSave, readOnly = false
       </div>
 
       {/* 状态栏 */}
-      <div className="px-8 py-1.5 text-xs text-gray-300 border-t border-gray-100 flex justify-between">
-        <span>{new Date(note.updatedAt).toLocaleString("zh-CN")}</span>
-        <span>{md.length} 字符</span>
+      <div className="px-8 py-1.5 text-xs border-t border-gray-100 flex justify-between items-center gap-4">
+        <span className="text-gray-300">{new Date(note.updatedAt).toLocaleString("zh-CN")}</span>
+        <div className="flex items-center gap-3">
+          {saveStateLabel(saveState) && (
+            <span className={
+              saveState === "error" ? "text-red-400"
+                : saveState === "saved" ? "text-green-500"
+                  : "text-gray-400"
+            }>
+              {saveStateLabel(saveState)}
+            </span>
+          )}
+          {!readOnly && (
+            <span className="text-gray-300 hidden sm:inline" title="编辑器快捷键">
+              ⌘S 保存 · ⌘K 链接 · # 标题 · - 列表
+            </span>
+          )}
+          <span className="text-gray-300">{md.length} 字符</span>
+        </div>
       </div>
     </div>
   );

@@ -78,12 +78,21 @@ body {
 .preview-note blockquote {
   border-left: 3px solid #cbd5e1; padding-left: .8rem; color: #64748b; margin: .6rem 0;
 }
-.preview-note pre {
-  background: #0f172a; color: #e2e8f0; padding: .9rem 1rem;
-  border-radius: .5rem; overflow-x: auto; font-size: .85rem; margin: .6rem 0;
+.preview-note pre.hljs-block {
+  padding: .9rem 1rem;
+  border-radius: .5rem;
+  overflow-x: auto;
+  font-size: .85rem;
+  margin: .6rem 0;
+  border: 1px solid #e5e7eb;
 }
-.preview-note code { background: #eef2ff; color: #4338ca; padding: .1rem .35rem; border-radius: .3rem; font-size: .85em; }
-.preview-note pre code { background: transparent; color: inherit; padding: 0; }
+.preview-note pre.hljs-block code.hljs {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+.preview-note code:not(.hljs) { background: #eef2ff; color: #4338ca; padding: .1rem .35rem; border-radius: .3rem; font-size: .85em; }
 .preview-note img { max-width: 100%; border-radius: .5rem; margin: .6rem 0; }
 .preview-note a { color: #2563eb; text-decoration: underline; }
 .preview-note table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
