@@ -14,14 +14,17 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import { Columns2, Eye, FileOutput, FolderOpen, ImagePlus, PencilLine, RotateCcw, Table2, Tag, Trash2, X } from "lucide-react";
+import { Columns2, Eye, FileOutput, FolderOpen, ImagePlus, Link2, PencilLine, RotateCcw, Table2, Tag, Trash2, X } from "lucide-react";
 import { db } from "../lib/db";
 import { exportNoteToPdf } from "../lib/exportPdf";
 import { createEditorShortcuts } from "../lib/editorShortcuts";
+import { applyLinkToEditor, readLinkFormState, type LinkFormState } from "../lib/linkInsert";
 import { extractHeadings, type TocItem } from "../lib/headings";
 import TocPanel from "./TocPanel";
 import MarkdownPreview from "./MarkdownPreview";
 import SharePanel from "./SharePanel";
+import LinkDialog from "./LinkDialog";
+import ToolbarButton from "./ToolbarButton";
 import type { Folder, Note } from "../types";
 import type { SaveState } from "../hooks/useNotes";
 
@@ -115,18 +118,18 @@ function folderSelectOptions(folders: Folder[], parentId: string | null = null, 
 const TOOLBAR = (editor: ReturnType<typeof useEditor>) =>
   editor
     ? [
-        { label: "B",   cls: "font-bold",            title: "粗体 ⌘B",              active: editor.isActive("bold"),              cmd: () => editor.chain().focus().toggleBold().run() },
-        { label: "I",   cls: "italic",               title: "斜体 ⌘I",              active: editor.isActive("italic"),            cmd: () => editor.chain().focus().toggleItalic().run() },
-        { label: "S",   cls: "line-through text-xs", title: "删除线",               active: editor.isActive("strike"),            cmd: () => editor.chain().focus().toggleStrike().run() },
-        { label: "`",   cls: "font-mono text-xs",    title: "行内代码 ⌘E",          active: editor.isActive("code"),              cmd: () => editor.chain().focus().toggleCode().run() },
-        { label: "H1",  cls: "text-xs",              title: "标题 1 ⌘⌥1",           active: editor.isActive("heading",{level:1}), cmd: () => editor.chain().focus().toggleHeading({level:1}).run() },
-        { label: "H2",  cls: "text-xs",              title: "标题 2 ⌘⌥2",           active: editor.isActive("heading",{level:2}), cmd: () => editor.chain().focus().toggleHeading({level:2}).run() },
-        { label: "H3",  cls: "text-xs",              title: "标题 3 ⌘⌥3",           active: editor.isActive("heading",{level:3}), cmd: () => editor.chain().focus().toggleHeading({level:3}).run() },
-        { label: "UL",  cls: "text-xs",              title: "无序列表 ⌘⇧8",         active: editor.isActive("bulletList"),        cmd: () => editor.chain().focus().toggleBulletList().run() },
-        { label: "OL",  cls: "text-xs",              title: "有序列表 ⌘⇧7",         active: editor.isActive("orderedList"),       cmd: () => editor.chain().focus().toggleOrderedList().run() },
-        { label: "☑",   cls: "text-xs",              title: "任务列表",             active: editor.isActive("taskList"),          cmd: () => editor.chain().focus().toggleTaskList().run() },
-        { label: '❝',   cls: "text-xs",              title: "引用 ⌘⇧9",             active: editor.isActive("blockquote"),        cmd: () => editor.chain().focus().toggleBlockquote().run() },
-        { label: "</>", cls: "font-mono text-xs",    title: "代码块 ⌘⌥C",           active: editor.isActive("codeBlock"),         cmd: () => editor.chain().focus().toggleCodeBlock().run() },
+        { label: "B",   cls: "font-bold",            tip: "粗体 (⌘B)",              active: editor.isActive("bold"),              cmd: () => editor.chain().focus().toggleBold().run() },
+        { label: "I",   cls: "italic",               tip: "斜体 (⌘I)",              active: editor.isActive("italic"),            cmd: () => editor.chain().focus().toggleItalic().run() },
+        { label: "S",   cls: "line-through text-xs", tip: "删除线",                 active: editor.isActive("strike"),            cmd: () => editor.chain().focus().toggleStrike().run() },
+        { label: "`",   cls: "font-mono text-xs",    tip: "行内代码 (⌘E)",          active: editor.isActive("code"),              cmd: () => editor.chain().focus().toggleCode().run() },
+        { label: "H1",  cls: "text-xs",              tip: "一级标题 (⌘⌥1)",         active: editor.isActive("heading",{level:1}), cmd: () => editor.chain().focus().toggleHeading({level:1}).run() },
+        { label: "H2",  cls: "text-xs",              tip: "二级标题 (⌘⌥2)",         active: editor.isActive("heading",{level:2}), cmd: () => editor.chain().focus().toggleHeading({level:2}).run() },
+        { label: "H3",  cls: "text-xs",              tip: "三级标题 (⌘⌥3)",         active: editor.isActive("heading",{level:3}), cmd: () => editor.chain().focus().toggleHeading({level:3}).run() },
+        { label: "UL",  cls: "text-xs",              tip: "无序列表 (⌘⇧8)",         active: editor.isActive("bulletList"),        cmd: () => editor.chain().focus().toggleBulletList().run() },
+        { label: "OL",  cls: "text-xs",              tip: "有序列表 (⌘⇧7)",         active: editor.isActive("orderedList"),       cmd: () => editor.chain().focus().toggleOrderedList().run() },
+        { label: "☑",   cls: "text-xs",              tip: "任务列表",               active: editor.isActive("taskList"),          cmd: () => editor.chain().focus().toggleTaskList().run() },
+        { label: '❝',   cls: "text-xs",              tip: "引用块 (⌘⇧9)",           active: editor.isActive("blockquote"),        cmd: () => editor.chain().focus().toggleBlockquote().run() },
+        { label: "</>", cls: "font-mono text-xs",    tip: "代码块 (⌘⌥C)",           active: editor.isActive("codeBlock"),         cmd: () => editor.chain().focus().toggleCodeBlock().run() },
       ]
     : [];
 
@@ -147,13 +150,21 @@ export default function Editor({ note, userId, folders, onSave, onFlushSave, sav
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
   const [exporting, setExporting] = useState(false);
   const [previewMd, setPreviewMd] = useState(note.content);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkForm, setLinkForm] = useState<LinkFormState>({
+    url: "https://",
+    text: "",
+    range: null,
+    isEditing: false,
+  });
 
   useEffect(() => { setTitle(note.title); setTags(note.tags); }, [note.id, note.title, note.tags]);
 
   const contentPasteExt = useMemo(() => createContentPasteExtension(userId), [userId]);
   const flushRef = useRef<() => void>(() => {});
+  const openLinkRef = useRef<() => void>(() => {});
   const shortcutsExt = useMemo(
-    () => createEditorShortcuts(() => flushRef.current()),
+    () => createEditorShortcuts(() => flushRef.current(), () => openLinkRef.current()),
     []
   );
 
@@ -200,7 +211,28 @@ export default function Editor({ note, userId, folders, onSave, onFlushSave, sav
       setPreviewMd(content);
       void onFlushSave({ content, title, tags });
     };
+    openLinkRef.current = () => {
+      if (readOnly) return;
+      setLinkForm(readLinkFormState(editor));
+      setLinkDialogOpen(true);
+    };
   }, [editor, readOnly, onFlushSave, title, tags]);
+
+  const handleLinkSubmit = useCallback((url: string, text: string) => {
+    if (!editor) return;
+    applyLinkToEditor(editor, url, text, linkForm.range);
+    const content = editor.storage.markdown.getMarkdown() as string;
+    setPreviewMd(content);
+    onSave({ content, title, tags });
+  }, [editor, linkForm.range, onSave, title, tags]);
+
+  const handleLinkRemove = useCallback(() => {
+    if (!editor || !linkForm.range) return;
+    editor.chain().focus().setTextSelection(linkForm.range).unsetLink().run();
+    const content = editor.storage.markdown.getMarkdown() as string;
+    setPreviewMd(content);
+    onSave({ content, title, tags });
+  }, [editor, linkForm.range, onSave, title, tags]);
 
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
@@ -338,17 +370,35 @@ export default function Editor({ note, userId, folders, onSave, onFlushSave, sav
 
       {/* 工具栏 */}
       <div className="flex items-center gap-0.5 px-6 py-1.5 border-b border-gray-100 flex-wrap">
-        {!readOnly && viewMode !== "preview" && TOOLBAR(editor).map(({ label, cmd, active, cls, title: tip }) => (
-          <button
-            key={label}
-            title={tip}
+        {!readOnly && viewMode !== "preview" && TOOLBAR(editor).map(({ label, cmd, active, cls, tip }) => (
+          <ToolbarButton
+            key={String(label)}
+            label={label}
+            tip={tip}
+            active={active}
+            className={cls}
             onMouseDown={(e) => { e.preventDefault(); cmd(); }}
-            className={`px-2 py-1 rounded text-sm transition-colors ${cls} ${active ? "bg-blue-100 text-blue-700" : "text-gray-500 hover:bg-gray-100"}`}
-          >{label}</button>
+          />
         ))}
         {!readOnly && viewMode !== "preview" && (
           <>
             <div className="w-px h-4 bg-gray-200 mx-1" />
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (editor) {
+                  setLinkForm(readLinkFormState(editor));
+                  setLinkDialogOpen(true);
+                }
+              }}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+                editor.isActive("link") ? "bg-blue-100 text-blue-700" : "text-gray-500 hover:bg-gray-100"
+              }`}
+              title="插入链接 ⌘K"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span>链接</span>
+            </button>
             <button
               onMouseDown={(e) => { e.preventDefault(); insertImage(); }}
               className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:bg-gray-100"
@@ -399,6 +449,16 @@ export default function Editor({ note, userId, folders, onSave, onFlushSave, sav
           </div>
         )}
       </div>
+
+      <LinkDialog
+        open={linkDialogOpen}
+        initialUrl={linkForm.url}
+        initialText={linkForm.text}
+        hasExistingLink={linkForm.isEditing}
+        onClose={() => setLinkDialogOpen(false)}
+        onSubmit={handleLinkSubmit}
+        onRemove={linkForm.isEditing ? handleLinkRemove : undefined}
+      />
 
       {/* 编辑区 / 预览区 */}
       <div className="flex flex-1 overflow-hidden">

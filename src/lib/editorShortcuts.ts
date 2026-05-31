@@ -1,7 +1,7 @@
 import { Extension } from "@tiptap/core";
 
 /** 编辑器快捷键：保存、链接及常用格式（与 StarterKit 内置快捷键互补） */
-export function createEditorShortcuts(onSave: () => void) {
+export function createEditorShortcuts(onSave: () => void, onOpenLinkDialog: () => void) {
   return Extension.create({
     name: "editorShortcuts",
     priority: 1000,
@@ -12,14 +12,7 @@ export function createEditorShortcuts(onSave: () => void) {
           return true;
         },
         "Mod-k": () => {
-          const previousUrl = this.editor.getAttributes("link").href as string | undefined;
-          const url = window.prompt("链接 URL", previousUrl ?? "https://");
-          if (url === null) return true;
-          if (url === "") {
-            this.editor.chain().focus().extendMarkRange("link").unsetLink().run();
-            return true;
-          }
-          this.editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+          onOpenLinkDialog();
           return true;
         },
         "Mod-Shift-7": () => this.editor.chain().focus().toggleOrderedList().run(),
