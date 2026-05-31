@@ -35,6 +35,10 @@ export interface DataAdapter {
   signIn(email: string, password: string): Promise<User>;
   signUp(email: string, password: string): Promise<User>;
   signOut(): Promise<void>;
+  /** 发送密码重置邮件（云端模式） */
+  requestPasswordReset(email: string): Promise<void>;
+  /** 修改密码；已登录修改需传 currentPassword，邮件重置链接进入时不传 */
+  updatePassword(newPassword: string, currentPassword?: string): Promise<void>;
   onAuthChange(cb: (user: User | null) => void): () => void;
 
   // 笔记 CRUD

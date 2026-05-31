@@ -68,6 +68,27 @@ export const localAdapter: DataAdapter = {
     emitAuth(null);
   },
 
+  async requestPasswordReset(email) {
+    const users = read<StoredUser[]>(USERS_KEY, []);
+    if (!users.some((u) => u.email === email)) throw new Error("该邮箱未注册");
+    throw new Error("本地模式不支持邮件重置，请登录后在侧边栏修改密码");
+  },
+
+  async updatePassword(newPassword, currentPassword) {
+    const user = await this.getCurrentUser();
+    if (!user) throw new Error("请先登录");
+    if (!currentPassword) throw new Error("请提供当前密码");
+    if (newPassword.length < 6) throw new Error("密码至少 6 位");
+
+    const users = read<StoredUser[]>(USERS_KEY, []);
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx === -1) throw new Error("用户不存在");
+    if (users[idx].password !== currentPassword) throw new Error("当前密码错误");
+
+    users[idx].password = newPassword;
+    write(USERS_KEY, users);
+  },
+
   onAuthChange(cb) {
     authListeners.add(cb);
     return () => authListeners.delete(cb);

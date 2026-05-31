@@ -5,6 +5,7 @@ import {
   FilePlus,
   Folder,
   FolderPlus,
+  KeyRound,
   LogOut,
   Pencil,
   Search,
@@ -12,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Folder as FolderType, Note, User } from "../types";
+import ChangePasswordDialog from "./ChangePasswordDialog";
 
 const NOTE_DRAG_MIME = "application/x-marknote-note-id";
 
@@ -365,6 +367,7 @@ export default function Sidebar({
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   useEffect(() => {
     setExpanded((prev) => {
@@ -452,6 +455,13 @@ export default function Sidebar({
           <p className="truncate text-xs text-gray-400">{user.email}</p>
         </div>
         <button
+          onClick={() => setChangePasswordOpen(true)}
+          className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/80 text-gray-400 hover:text-blue-600 transition-colors"
+          title="修改密码"
+        >
+          <KeyRound className="w-4 h-4" />
+        </button>
+        <button
           onClick={onSignOut}
           className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/80 text-gray-400 hover:text-red-500 transition-colors"
           title="退出登录"
@@ -459,6 +469,11 @@ export default function Sidebar({
           <LogOut className="w-4 h-4" />
         </button>
       </div>
+
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+      />
 
       <div className="px-3 pb-2">
         <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">

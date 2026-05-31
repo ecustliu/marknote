@@ -124,6 +124,30 @@ export const supabaseAdapter: DataAdapter = {
     await db().auth.signOut();
   },
 
+  async requestPasswordReset(email) {
+    const { error } = await db().auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  async updatePassword(newPassword, currentPassword) {
+    if (newPassword.length < 6) throw new Error("密码至少 6 位");
+
+    if (currentPassword) {
+      const user = await this.getCurrentUser();
+      if (!user) throw new Error("请先登录");
+      const { error: signInError } = await db().auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (signInError) throw new Error("当前密码错误");
+    }
+
+    const { error } = await db().auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
+  },
+
   onAuthChange(cb) {
     const { data } = db().auth.onAuthStateChange((_event, session) => {
       cb(session?.user ? { id: session.user.id, email: session.user.email ?? "" } : null);

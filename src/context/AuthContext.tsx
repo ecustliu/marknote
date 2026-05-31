@@ -15,6 +15,8 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string, currentPassword?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -45,6 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await db.signOut();
         setUser(null);
       },
+      requestPasswordReset: (email) => db.requestPasswordReset(email),
+      updatePassword: (newPassword, currentPassword) =>
+        db.updatePassword(newPassword, currentPassword),
     }),
     [user, loading]
   );

@@ -1,30 +1,22 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { isCloud } from "../lib/db";
+import { formatAuthError } from "../lib/authErrors";
 import { BookOpen } from "lucide-react";
-
-function formatAuthError(err: unknown): string {
-  if (!(err instanceof Error)) return "操作失败";
-  const msg = err.message;
-  if (msg === "Failed to fetch" || msg.includes("NetworkError") || msg.includes("fetch")) {
-    return "无法连接 Supabase，请检查 .env.local 中的 URL 和 anon key 是否正确，并确认已执行 supabase/schema.sql";
-  }
-  if (msg.toLowerCase().includes("email not confirmed")) {
-    return "邮箱尚未确认。请查收注册邮件并点击确认链接，或在 Supabase 控制台关闭 Confirm email（Authentication → Providers → Email）";
-  }
-  return msg;
-}
 
 export default function AuthPage() {
   const { signIn, signUp, user } = useAuth();
+  const location = useLocation();
+  const resetSuccess = (location.state as { passwordReset?: boolean } | null)?.passwordReset;
+
   if (user) return <Navigate to="/" replace />;
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
+  const [info, setInfo] = useState(resetSuccess ? "密码已重置，请使用新密码登录" : "");
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -50,7 +42,6 @@ export default function AuthPage() {
   return (
     <div className="min-h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-3">
             <BookOpen className="w-7 h-7 text-white" />
@@ -64,7 +55,6 @@ export default function AuthPage() {
           )}
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           <h2 className="text-lg font-semibold text-gray-700 mb-6">
             {mode === "login" ? "登录账号" : "创建账号"}
@@ -83,7 +73,17 @@ export default function AuthPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">密码</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-600">密码</label>
+                {mode === "login" && (
+                  <Link
+                    to="/auth/forgot-password"
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    忘记密码？
+                  </Link>
+                )}
+              </div>
               <input
                 type="password"
                 required
