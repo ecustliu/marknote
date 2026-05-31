@@ -97,9 +97,17 @@ export const localAdapter: DataAdapter = {
   async listNotes(userId) {
     const all = read<Note[]>(NOTES_KEY, []);
     return all
-      .filter((n) => n.userId === userId)
-      .map((n) => ({ ...n, folderId: n.folderId ?? null }))
+      .filter((n) => n.userId === userId && !n.deletedAt)
+      .map((n) => ({ ...n, folderId: n.folderId ?? null, deletedAt: n.deletedAt ?? null }))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  },
+
+  async listTrashedNotes(userId) {
+    const all = read<Note[]>(NOTES_KEY, []);
+    return all
+      .filter((n) => n.userId === userId && n.deletedAt)
+      .map((n) => ({ ...n, folderId: n.folderId ?? null, deletedAt: n.deletedAt ?? null }))
+      .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
   },
 
   async createNote(userId, partial) {
@@ -112,6 +120,7 @@ export const localAdapter: DataAdapter = {
       content: partial?.content ?? "",
       tags: partial?.tags ?? [],
       folderId: partial?.folderId ?? null,
+      deletedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -129,6 +138,7 @@ export const localAdapter: DataAdapter = {
       ...patch,
       id,
       folderId: patch.folderId !== undefined ? patch.folderId : (all[idx].folderId ?? null),
+      deletedAt: patch.deletedAt !== undefined ? patch.deletedAt : (all[idx].deletedAt ?? null),
       updatedAt: new Date().toISOString(),
     };
     all[idx] = updated;
@@ -138,9 +148,29 @@ export const localAdapter: DataAdapter = {
 
   async deleteNote(id) {
     const all = read<Note[]>(NOTES_KEY, []);
+    const idx = all.findIndex((n) => n.id === id);
+    if (idx === -1) throw new Error("笔记不存在");
+    all[idx] = { ...all[idx], deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    write(NOTES_KEY, all);
+  },
+
+  async restoreNote(id) {
+    return this.updateNote(id, { deletedAt: null });
+  },
+
+  async permanentlyDeleteNote(id) {
+    const all = read<Note[]>(NOTES_KEY, []);
     write(
       NOTES_KEY,
       all.filter((n) => n.id !== id)
+    );
+  },
+
+  async emptyTrash(userId) {
+    const all = read<Note[]>(NOTES_KEY, []);
+    write(
+      NOTES_KEY,
+      all.filter((n) => n.userId !== userId || !n.deletedAt)
     );
   },
 

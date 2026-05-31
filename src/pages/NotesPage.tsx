@@ -11,10 +11,14 @@ export default function NotesPage() {
   const { user, signOut } = useAuth();
   const {
     notes,
+    trashedNotes,
     folders,
     loading,
     createNote,
     deleteNote,
+    restoreNote,
+    permanentlyDeleteNote,
+    emptyTrash,
     saveNote,
     createFolder,
     renameFolder,
@@ -22,18 +26,56 @@ export default function NotesPage() {
     moveNoteToFolder,
   } = useNotes(user!.id);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showTrash, setShowTrash] = useState(false);
   const { width, collapsed, resizing, toggleCollapsed, startResize } = useSidebarLayout();
 
-  const activeNote = notes.find((n) => n.id === activeId) ?? null;
+  const activeNote =
+    notes.find((n) => n.id === activeId) ??
+    trashedNotes.find((n) => n.id === activeId) ??
+    null;
 
   async function handleCreate(folderId?: string | null) {
     const note = await createNote(folderId);
+    setShowTrash(false);
     setActiveId(note.id);
   }
 
   async function handleDelete(id: string) {
     await deleteNote(id);
-    if (activeId === id) setActiveId(notes.find((n) => n.id !== id)?.id ?? null);
+    if (activeId === id) {
+      setActiveId(notes.find((n) => n.id !== id)?.id ?? null);
+    }
+  }
+
+  async function handleRestore(id: string) {
+    const restored = await restoreNote(id);
+    setShowTrash(false);
+    setActiveId(restored.id);
+  }
+
+  async function handlePermanentDelete(id: string) {
+    if (!confirm("彻底删除后无法恢复，确定继续？")) return;
+    await permanentlyDeleteNote(id);
+    if (activeId === id) {
+      setActiveId(trashedNotes.find((n) => n.id !== id)?.id ?? null);
+    }
+  }
+
+  async function handleEmptyTrash() {
+    if (!confirm(`确定清空回收站中的 ${trashedNotes.length} 篇笔记？此操作不可恢复。`)) return;
+    await emptyTrash();
+    setActiveId(null);
+  }
+
+  function handleToggleTrash(show: boolean) {
+    setShowTrash(show);
+    if (show) {
+      if (!trashedNotes.some((n) => n.id === activeId)) {
+        setActiveId(trashedNotes[0]?.id ?? null);
+      }
+    } else if (!notes.some((n) => n.id === activeId)) {
+      setActiveId(notes[0]?.id ?? null);
+    }
   }
 
   return (
@@ -56,6 +98,12 @@ export default function NotesPage() {
             onDelete={handleDelete}
             onMoveNote={moveNoteToFolder}
             onSignOut={signOut}
+            trashedNotes={trashedNotes}
+            showTrash={showTrash}
+            onToggleTrash={handleToggleTrash}
+            onRestore={handleRestore}
+            onPermanentDelete={handlePermanentDelete}
+            onEmptyTrash={handleEmptyTrash}
           />
           <div
             role="separator"
@@ -95,12 +143,19 @@ export default function NotesPage() {
               note={activeNote}
               userId={user!.id}
               folders={folders}
+              readOnly={!!activeNote.deletedAt}
+              onRestore={activeNote.deletedAt ? () => void handleRestore(activeNote.id) : undefined}
+              onPermanentDelete={
+                activeNote.deletedAt ? () => void handlePermanentDelete(activeNote.id) : undefined
+              }
               onSave={(patch: Partial<Note>) => saveNote(activeNote.id, patch)}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-3">
               <BookOpen className="w-12 h-12" />
-              <p className="text-sm">从左侧选择笔记，或点击 + 新建</p>
+              <p className="text-sm">
+                {showTrash ? "回收站是空的" : "从左侧选择笔记，或点击 + 新建"}
+              </p>
             </div>
           )}
         </main>

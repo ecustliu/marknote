@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowLeft,
   ChevronDown,
   ChevronRight,
   FilePlus,
@@ -8,6 +9,7 @@ import {
   KeyRound,
   LogOut,
   Pencil,
+  RotateCcw,
   Search,
   Tag,
   Trash2,
@@ -30,6 +32,12 @@ interface Props {
   onDelete: (id: string) => void;
   onMoveNote: (noteId: string, folderId: string | null) => void;
   onSignOut: () => void;
+  trashedNotes: Note[];
+  showTrash: boolean;
+  onToggleTrash: (show: boolean) => void;
+  onRestore: (id: string) => void;
+  onPermanentDelete: (id: string) => void;
+  onEmptyTrash: () => void;
 }
 
 function userInitials(email: string): string {
@@ -120,10 +128,61 @@ function NoteItem({
         )}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
+          title="移至回收站"
           className="absolute right-2 top-2.5 hidden group-hover:flex p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
+      </button>
+    </li>
+  );
+}
+
+function TrashNoteItem({
+  note,
+  activeId,
+  onSelect,
+  onRestore,
+  onPermanentDelete,
+}: {
+  note: Note;
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPermanentDelete: (id: string) => void;
+}) {
+  const deletedLabel = note.deletedAt
+    ? new Date(note.deletedAt).toLocaleString("zh-CN")
+    : "";
+
+  return (
+    <li>
+      <button
+        onClick={() => onSelect(note.id)}
+        className={`w-full text-left px-3 py-2 rounded-lg transition-colors group relative ${
+          activeId === note.id ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50 text-gray-700"
+        }`}
+      >
+        <p className="text-sm font-medium truncate leading-snug pr-16">
+          {note.title || "未命名笔记"}
+        </p>
+        <p className="text-xs text-gray-400 mt-0.5">删除于 {deletedLabel}</p>
+        <div className="absolute right-2 top-2 flex gap-0.5">
+          <button
+            onClick={(e) => { e.stopPropagation(); onRestore(note.id); }}
+            title="恢复"
+            className="p-1 rounded hover:bg-green-50 text-gray-400 hover:text-green-600 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onPermanentDelete(note.id); }}
+            title="彻底删除"
+            className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-400 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </button>
     </li>
   );
@@ -363,6 +422,12 @@ export default function Sidebar({
   onDelete,
   onMoveNote,
   onSignOut,
+  trashedNotes,
+  showTrash,
+  onToggleTrash,
+  onRestore,
+  onPermanentDelete,
+  onEmptyTrash,
 }: Props) {
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState<string | null>(null);
@@ -427,23 +492,45 @@ export default function Sidebar({
   return (
     <aside className="h-full flex flex-col bg-white select-none min-w-0">
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
-        <span className="font-bold text-gray-800 text-base">Marknote</span>
-        <div className="flex gap-1">
-          <button
-            onClick={() => onCreate(null)}
-            className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
-            title="新建笔记"
-          >
-            <FilePlus className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => handleCreateFolder(null)}
-            className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors"
-            title="新建文件夹"
-          >
-            <FolderPlus className="w-4 h-4" />
-          </button>
-        </div>
+        {showTrash ? (
+          <>
+            <button
+              onClick={() => onToggleTrash(false)}
+              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              返回笔记
+            </button>
+            {trashedNotes.length > 0 && (
+              <button
+                onClick={onEmptyTrash}
+                className="text-xs text-red-500 hover:text-red-600 hover:underline"
+              >
+                清空回收站
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="font-bold text-gray-800 text-base">Marknote</span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => onCreate(null)}
+                className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
+                title="新建笔记"
+              >
+                <FilePlus className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleCreateFolder(null)}
+                className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 transition-colors"
+                title="新建文件夹"
+              >
+                <FolderPlus className="w-4 h-4" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="mx-3 mt-3 mb-1 flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50/40 px-3 py-2.5">
@@ -475,19 +562,21 @@ export default function Sidebar({
         onClose={() => setChangePasswordOpen(false)}
       />
 
-      <div className="px-3 pb-2">
-        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
-          <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索标题或内容…"
-            className="bg-transparent text-sm flex-1 outline-none text-gray-700 placeholder-gray-400"
-          />
+      {!showTrash && (
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+            <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索标题或内容…"
+              className="bg-transparent text-sm flex-1 outline-none text-gray-700 placeholder-gray-400"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      {allTags.length > 0 && (
+      {!showTrash && allTags.length > 0 && (
         <div className="px-3 pb-2 flex flex-wrap gap-1">
           {allTags.map((tag) => (
             <button
@@ -506,8 +595,24 @@ export default function Sidebar({
         </div>
       )}
 
-      <ul className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
-        {isFiltering ? (
+      <ul className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
+        {showTrash ? (
+          <>
+            {trashedNotes.length === 0 && (
+              <li className="text-xs text-gray-400 text-center mt-8">回收站是空的</li>
+            )}
+            {trashedNotes.map((note) => (
+              <TrashNoteItem
+                key={note.id}
+                note={note}
+                activeId={activeId}
+                onSelect={onSelect}
+                onRestore={onRestore}
+                onPermanentDelete={onPermanentDelete}
+              />
+            ))}
+          </>
+        ) : isFiltering ? (
           <>
             {filtered.length === 0 && (
               <li className="text-xs text-gray-400 text-center mt-8">没有匹配的笔记</li>
@@ -586,6 +691,27 @@ export default function Sidebar({
           </>
         )}
       </ul>
+
+      {!showTrash && (
+        <div className="border-t border-gray-100 px-3 py-2">
+          <button
+            onClick={() => onToggleTrash(true)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+              trashedNotes.length > 0
+                ? "text-gray-600 hover:bg-gray-50"
+                : "text-gray-400 hover:bg-gray-50"
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>回收站</span>
+            {trashedNotes.length > 0 && (
+              <span className="ml-auto text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                {trashedNotes.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

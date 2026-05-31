@@ -63,6 +63,15 @@ create table if not exists public.notes (
 -- 已有 notes 表时追加 folder_id 列（新库 create table 已含该列，此处兼容旧库）
 alter table public.notes add column if not exists folder_id uuid references public.folders(id) on delete set null;
 
+-- 回收站：软删除时间戳，null 表示未删除
+alter table public.notes add column if not exists deleted_at timestamptz;
+
+create index if not exists notes_user_active on public.notes (user_id, updated_at desc)
+  where deleted_at is null;
+
+create index if not exists notes_user_trash on public.notes (user_id, deleted_at desc)
+  where deleted_at is not null;
+
 create index if not exists notes_fts on public.notes
   using gin(to_tsvector('simple', title || ' ' || content));
 

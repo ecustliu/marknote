@@ -47,6 +47,7 @@ interface NoteRow {
   content: string;
   tags: string[] | null;
   folder_id: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +69,7 @@ function rowToNote(r: NoteRow): Note {
     content: r.content ?? "",
     tags: r.tags ?? [],
     folderId: r.folder_id ?? null,
+    deletedAt: r.deleted_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -95,6 +97,15 @@ async function hasFoldersSchema(): Promise<boolean> {
 
 function foldersNotReadyError(): Error {
   return new Error("文件夹功能需要先执行 supabase/schema.sql 数据库迁移");
+}
+
+/** 检测是否已执行回收站迁移（notes.deleted_at） */
+let trashSchemaReady: boolean | null = null;
+async function hasTrashSchema(): Promise<boolean> {
+  if (trashSchemaReady !== null) return trashSchemaReady;
+  const { error } = await db().from("notes").select("deleted_at").limit(0);
+  trashSchemaReady = !error;
+  return trashSchemaReady;
 }
 
 export const supabaseAdapter: DataAdapter = {
@@ -156,11 +167,21 @@ export const supabaseAdapter: DataAdapter = {
   },
 
   async listNotes(userId) {
+    let query = db().from("notes").select("*").eq("user_id", userId);
+    if (await hasTrashSchema()) query = query.is("deleted_at", null);
+    const { data, error } = await query.order("updated_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data as NoteRow[]).map(rowToNote);
+  },
+
+  async listTrashedNotes(userId) {
+    if (!(await hasTrashSchema())) return [];
     const { data, error } = await db()
       .from("notes")
       .select("*")
       .eq("user_id", userId)
-      .order("updated_at", { ascending: false });
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data as NoteRow[]).map(rowToNote);
   },
@@ -188,6 +209,9 @@ export const supabaseAdapter: DataAdapter = {
     if (patch.folderId !== undefined && (await hasFoldersSchema())) {
       payload.folder_id = patch.folderId;
     }
+    if (patch.deletedAt !== undefined && (await hasTrashSchema())) {
+      payload.deleted_at = patch.deletedAt;
+    }
     const { data, error } = await db()
       .from("notes")
       .update(payload)
@@ -199,7 +223,30 @@ export const supabaseAdapter: DataAdapter = {
   },
 
   async deleteNote(id) {
+    if (await hasTrashSchema()) {
+      await this.updateNote(id, { deletedAt: new Date().toISOString() });
+      return;
+    }
     const { error } = await db().from("notes").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+  },
+
+  async restoreNote(id) {
+    return this.updateNote(id, { deletedAt: null });
+  },
+
+  async permanentlyDeleteNote(id) {
+    const { error } = await db().from("notes").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+  },
+
+  async emptyTrash(userId) {
+    if (!(await hasTrashSchema())) return;
+    const { error } = await db()
+      .from("notes")
+      .delete()
+      .eq("user_id", userId)
+      .not("deleted_at", "is", null);
     if (error) throw new Error(error.message);
   },
 

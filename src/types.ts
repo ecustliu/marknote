@@ -22,6 +22,8 @@ export interface Note {
   tags: string[];
   /** 所属文件夹，null 表示未分类 */
   folderId: string | null;
+  /** 移入回收站的时间，null 表示未删除 */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,9 +45,14 @@ export interface DataAdapter {
 
   // 笔记 CRUD
   listNotes(userId: string): Promise<Note[]>;
+  listTrashedNotes(userId: string): Promise<Note[]>;
   createNote(userId: string, partial?: Partial<Note>): Promise<Note>;
   updateNote(id: string, patch: Partial<Note>): Promise<Note>;
+  /** 移入回收站 */
   deleteNote(id: string): Promise<void>;
+  restoreNote(id: string): Promise<Note>;
+  permanentlyDeleteNote(id: string): Promise<void>;
+  emptyTrash(userId: string): Promise<void>;
 
   // 文件夹 CRUD
   listFolders(userId: string): Promise<Folder[]>;
