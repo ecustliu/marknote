@@ -64,9 +64,7 @@ export default function AuthPage() {
           <p className="text-sm text-gray-500 mt-1">
             {isCloud ? "云端同步已启用" : "本地模式（演示）"}
           </p>
-          {isCloud && (
-            <p className="text-xs text-green-600 mt-1">数据保存在 Supabase 云端</p>
-          )}
+
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
